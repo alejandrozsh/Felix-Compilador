@@ -1,27 +1,4 @@
-    SET a TO 5;
-    SET b TO 10;
-    SET c TO 2;
-    SET i TO 0;
-
-    WHILE (i < 10) DO
-        SET t1 TO a + b;
-        SET t2 TO a + b;
-        SET t3 TO t1 * c;
-
-        SET x TO t2 + t3;
-        SET y TO a + b;
-
-        SET z TO y * c;
-
-        SET r TO a * b;
-
-        SET s TO r + c;
-
-        SET i TO i + 1;
-    ENDWHILE
-
-    WRITE x;
-    WRITE y;
-    WRITE z;
-    WRITE s;
-    
+SET x TO 10;
+SET y TO x;
+SET z TO y + 5;
+WRITE z;
