@@ -2,7 +2,7 @@
   COMPILADOR FELIX - CÓDIGO INTERMEDIO (Sin Optimizar)
 ==================================================
 Archivo fuente : entrada_web.txt
-Fecha y hora   : 19/04/2026 21:28:47
+Fecha y hora   : 19/04/2026 22:33:09
 ==================================================
 
 No.    Operador     Argumento 1    Argumento 2    Resultado   
