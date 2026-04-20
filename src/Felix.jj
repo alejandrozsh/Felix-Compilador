@@ -1,0 +1,1292 @@
+options {
+    IGNORE_CASE = true;
+    STATIC = false;
+}
+
+PARSER_BEGIN(Felix)
+
+import java.util.*;
+
+// ============================================================
+// AST NODES
+// ============================================================
+abstract class ExprNode { String type; }
+
+class LiteralNode extends ExprNode {
+    String value;
+    public LiteralNode(String value, String type) { this.value = value; this.type = type; }
+}
+
+class VariableNode extends ExprNode {
+    String name;
+    public VariableNode(String name) { this.name = name; this.type = "PENDING_LOOKUP"; }
+}
+
+class BinaryOpNode extends ExprNode {
+    ExprNode left, right; String operator;
+    public BinaryOpNode(String operator, ExprNode left, ExprNode right) {
+        this.operator = operator; this.left = left; this.right = right;
+    }
+}
+
+class UnaryOpNode extends ExprNode {
+    ExprNode operand; String operator;
+    public UnaryOpNode(String operator, ExprNode operand) {
+        this.operator = operator; this.operand = operand;
+    }
+}
+
+class MatrixAccessNode extends ExprNode {
+    String name; ExprNode row, col;
+    public MatrixAccessNode(String name, ExprNode row, ExprNode col) {
+        this.name = name; this.row = row; this.col = col; this.type = "PENDING_LOOKUP";
+    }
+}
+
+// ============================================================
+// INTERMEDIATE CODE — QUADRUPLES
+// ============================================================
+class IntermediateInstruction {
+    String operator, arg1, arg2, result;
+    public IntermediateInstruction(String op, String a1, String a2, String res) {
+        this.operator = op; this.arg1 = a1; this.arg2 = a2; this.result = res;
+    }
+}
+
+// ============================================================
+// BLOQUES BÁSICOS + UTILIDADES
+// ============================================================
+class BasicBlock {
+    int id;
+    List<IntermediateInstruction> instructions = new ArrayList<IntermediateInstruction>();
+    public BasicBlock(int id) { this.id = id; }
+}
+
+class OptimizerUtils {
+
+    // Construye bloques básicos.
+    // Cada LABEL inicia un bloque nuevo.
+    // GOTO e IFT cierran el bloque actual.
+    public static List<BasicBlock> buildBlocks(List<IntermediateInstruction> code) {
+        List<BasicBlock> blocks = new ArrayList<BasicBlock>();
+        BasicBlock current = new BasicBlock(0);
+        blocks.add(current);
+        for (IntermediateInstruction ins : code) {
+            if (ins.operator.equals("LABEL")) {
+                current = new BasicBlock(blocks.size());
+                blocks.add(current);
+                current.instructions.add(ins);
+            } else {
+                current.instructions.add(ins);
+                if (ins.operator.equals("GOTO") || ins.operator.equals("IFT")) {
+                    current = new BasicBlock(blocks.size());
+                    blocks.add(current);
+                }
+            }
+        }
+        return blocks;
+    }
+
+    public static List<IntermediateInstruction> flatten(List<BasicBlock> blocks) {
+        List<IntermediateInstruction> code = new ArrayList<IntermediateInstruction>();
+        for (BasicBlock b : blocks) code.addAll(b.instructions);
+        return code;
+    }
+
+    // Resuelve la cadena completa de un mapa de reemplazos para un operando.
+    // Ej: mapa {b:a, c:b} aplicado a "c" devuelve "a".
+    // El Set<visited> previene ciclos infinitos.
+    public static String applyMap(String operand, Map<String, String> map) {
+        if (operand == null) return null;
+        String resolved = operand;
+        Set<String> visited = new HashSet<String>();
+        while (map.containsKey(resolved) && !visited.contains(resolved)) {
+            visited.add(resolved);
+            resolved = map.get(resolved);
+        }
+        return resolved;
+    }
+
+    // ¿Es la cadena un temporal generado por el compilador?
+    // (t1, t2, t_for_x, ...)
+    public static boolean isTemp(String s) {
+        return s != null && (s.matches("t\\d+") || s.startsWith("t_"));
+    }
+
+    // ¿Es la cadena un literal numérico o de cadena?
+    public static boolean isLiteral(String s) {
+        if (s == null) return false;
+        return s.matches("-?\\d+(\\.\\d+)?") || s.startsWith("\"");
+    }
+}
+
+interface Optimizer {
+    List<IntermediateInstruction> optimize(List<IntermediateInstruction> code);
+}
+
+// ============================================================
+// 0. PEEPHOLE OPTIMIZER (Colapso de Temporales)
+// Colapsa "OP a b -> t1" seguido de "= t1 -> x" en "OP a b -> x"
+// ============================================================
+class PeepholeOptimizer implements Optimizer {
+    public List<IntermediateInstruction> optimize(List<IntermediateInstruction> code) {
+        List<IntermediateInstruction> result = new ArrayList<IntermediateInstruction>();
+        for (int i = 0; i < code.size(); i++) {
+            IntermediateInstruction curr = code.get(i);
+            if (i < code.size() - 1) {
+                IntermediateInstruction next = code.get(i + 1);
+                // Si la actual genera un temporal y la siguiente es una asignación directa a variable
+                if (curr.result != null && OptimizerUtils.isTemp(curr.result) &&
+                    next.operator.equals("=") && next.arg1 != null && 
+                    next.arg1.equals(curr.result) && next.arg2 == null) {
+                    
+                    // Fusionar: El resultado de la op original ahora es la variable final
+                    curr.result = next.result;
+                    result.add(curr);
+                    i++; // Saltamos la instrucción de asignación redundante
+                    continue;
+                }
+            }
+            result.add(curr);
+        }
+        return result;
+    }
+}
+
+// ============================================================
+// 1. ELIMINACIÓN DE SUBEXPRESIONES COMUNES (CSE)
+//
+// Opera por bloques básicos para respetar el flujo de control.
+// Por cada bloque:
+//   - Mantiene una tabla "expresión → primer temporal que la calculó".
+//   - Si detecta una expresión repetida, NO agrega la instrucción,
+//     y registra que el nuevo temporal es alias del primero.
+//   - Aplica esos alias a los argumentos de instrucciones siguientes.
+//   - Invalida la tabla si una variable base es redefinida.
+//
+// ANTES: 
+//  t1=a+b | t2=a+b | t3=t2*c | y=t3
+// DESPUÉS: t1=a+b | t3=t1*c | y=t3        (t2 eliminada)
+// ============================================================
+class CommonSubexpressionElimination implements Optimizer {
+    public List<IntermediateInstruction> optimize(List<IntermediateInstruction> code) {
+        List<BasicBlock> blocks = OptimizerUtils.buildBlocks(code);
+        for (BasicBlock block : blocks) {
+            Map<String, String> exprTable    = new HashMap<String, String>();
+            Map<String, String> replacements = new HashMap<String, String>();
+            List<IntermediateInstruction> clean = new ArrayList<IntermediateInstruction>();
+            for (IntermediateInstruction ins : block.instructions) {
+                // Aplicar alias acumulados a los operandos (nunca al result)
+                ins.arg1 = OptimizerUtils.applyMap(ins.arg1, replacements);
+                ins.arg2 = OptimizerUtils.applyMap(ins.arg2, replacements);
+
+                boolean isRedundant = false;
+
+                // ¿Operación binaria candidate a CSE?
+                if (ins.arg1 != null && ins.arg2 != null
+                        && !ins.operator.equals("=")
+                        && !ins.operator.startsWith("IF")
+                        && !ins.operator.equals("GOTO")
+                        && !ins.operator.equals("LABEL")
+                        && !ins.operator.equals("WRITE")
+                        && !ins.operator.equals("READ")
+                        && !ins.operator.equals("NEWMAT")
+                        && !ins.operator.equals("MATGET")) {
+
+                    String key = ins.operator + "|" + ins.arg1 + "|" + ins.arg2;
+                    if (exprTable.containsKey(key)) {
+                        // Redundante: redirigir usos futuros del result al primer temporal
+                        replacements.put(ins.result, exprTable.get(key));
+                        isRedundant = true;
+                    } else {
+                        exprTable.put(key, ins.result);
+                    }
+                }
+
+                // Invalidar caché si result es una variable base de alguna expresión registrada
+                if (ins.result != null && !isRedundant) {
+                    List<String> toRemove = new ArrayList<String>();
+                    for (String key : exprTable.keySet()) {
+                        String[] parts = key.split("\\|");
+                        if (parts.length == 3
+                                && (parts[1].equals(ins.result) || parts[2].equals(ins.result))) {
+                            toRemove.add(key);
+                        }
+                    }
+                    for (String k : toRemove) exprTable.remove(k);
+                }
+
+                if (!isRedundant) clean.add(ins);
+            }
+            block.instructions = clean;
+        }
+        return OptimizerUtils.flatten(blocks);
+    }
+}
+
+// ============================================================
+// 2. PROPAGACIÓN DE COPIAS (global, dos pasadas)
+//
+// PROBLEMA ANTERIOR:
+//   - Operaba por bloques → el mapa se reiniciaba en cada bloque.
+//   - Bloqueaba copias de temporales (t1) para evitar retroceder,
+//     pero eso impedía que "e = t1" propagara "t1" a usos de "e".
+//   - El regex "t\d+" estaba mal escapado en JavaCC y nunca matcheaba.
+//
+// SOLUCIÓN:
+//   Pasada 1 – construir copyMap GLOBAL:
+//     Para cada "x = y" (sin arg2):
+//       Resolver y con el mapa actual → y_resuelto
+//       Registrar copyMap[x] = y_resuelto
+//     Esto aplica tanto cuando y es variable de usuario COMO temporal.
+//     La dirección siempre es: "usar y_resuelto en lugar de x".
+//
+//   Pasada 2 – aplicar copyMap a arg1 y arg2 de toda instrucción.
+//     result nunca se reemplaza (es el destino de la instrucción).
+//
+//   La limpieza de copias muertas la hace DCE en la siguiente fase.
+//
+// ANTES:  a=10 | b=a | c=b | d=c | WRITE d
+// DESPUÉS (esta fase): a=10 | b=10 | c=10 | d=10 | WRITE 10
+// DESPUÉS (+ DCE):     a=10 | WRITE 10
+//
+// ANTES:  t1=a+b | e=t1 | f=t1 | WRITE e | WRITE f
+// DESPUÉS (esta fase): t1=a+b | e=t1 | f=t1 | WRITE t1 | WRITE t1
+// DESPUÉS (+ DCE):     t1=a+b | WRITE t1 | WRITE t1
+// ============================================================
+class CopyPropagation implements Optimizer {
+    public List<IntermediateInstruction> optimize(List<IntermediateInstruction> code) {
+
+       // ── Pasada 1: construir mapa global de copias ──────────────────────
+        Map<String, String> copyMap = new LinkedHashMap<String, String>();
+        for (IntermediateInstruction ins : code) {
+            if (ins.operator.equals("=")
+                    && ins.arg2 == null
+                    && ins.arg1 != null
+                    && ins.result != null) {
+            
+                // Resolver la fuente siguiendo la cadena completa ya registrada
+                String resolvedSrc = OptimizerUtils.applyMap(ins.arg1, copyMap);
+                
+                // [NUEVO] Preferir nombres de variables de usuario sobre temporales
+                if (OptimizerUtils.isTemp(resolvedSrc) && !OptimizerUtils.isTemp(ins.result)) {
+                    // Si el origen es un temporal (t1) y el destino es una variable real (x),
+                    // obligamos al temporal a adoptar permanentemente el nombre real.
+                    copyMap.put(resolvedSrc, ins.result);
+                } else {
+                    // Comportamiento por defecto (ej. x = y, o t2 = t1)
+                    copyMap.put(ins.result, resolvedSrc);
+                }
+            }
+        }
+
+        // ── Pasada 2: aplicar mapa a toda la lista (lista nueva) ──────────
+        // arg1 y arg2 se reemplazan con la fuente resuelta.
+        // result NUNCA se reemplaza: sigue siendo el destino original.
+        List<IntermediateInstruction> result = new ArrayList<IntermediateInstruction>();
+        for (IntermediateInstruction ins : code) {
+            result.add(new IntermediateInstruction(
+                ins.operator,
+                OptimizerUtils.applyMap(ins.arg1, copyMap),
+                OptimizerUtils.applyMap(ins.arg2, copyMap),
+                ins.result
+            ));
+        }
+
+        return result;
+    }
+}
+
+// ============================================================
+// 3. REDUCCIÓN DE FRECUENCIA EN CICLOS (Loop Invariant Code Motion)
+//
+// PROBLEMA ANTERIOR:
+//   - Detectaba como "ciclo" cualquier LABEL seguido de cualquier GOTO,
+//     capturando etiquetas de IF que no son bucles.
+//   - Colocaba los invariantes dentro del cuerpo en lugar de antes del LABEL.
+//   - No iteraba hasta punto fijo (una pasada podía dejar dependencias).
+//
+// SOLUCIÓN:
+//   Un back-edge real es un GOTO L donde L aparece en una posición
+//   ANTERIOR en la lista (índice menor). Eso distingue bucles de IFs.
+//
+//   Para cada back-edge encontrado:
+//     1. Calcular el conjunto "modified" = variables escritas en el cuerpo.
+//     2. Un invariante es una instrucción cuyo result es temporal (tN o t_*)
+//        y cuyos arg1/arg2 NO están en modified (o son literales).
+//     3. Extraer invariantes del cuerpo e insertarlos ANTES del LABEL.
+//     4. Repetir hasta que no haya más cambios (punto fijo).
+//
+// ANTES:  LABEL L1 | IFT t1 L3 | GOTO L2 | LABEL L3 | t2=a+b | GOTO L1
+// DESPUÉS: t2=a+b | LABEL L1 | IFT t1 L3 | GOTO L2 | LABEL L3 | GOTO L1
+// ============================================================
+class LoopInvariantCodeMotion implements Optimizer {
+    public List<IntermediateInstruction> optimize(List<IntermediateInstruction> code) {
+        List<IntermediateInstruction> result = new ArrayList<IntermediateInstruction>(code);
+        boolean changed = true;
+
+        while (changed) {
+            changed = false;
+            // Mapa label → índice actual en la lista
+            Map<String, Integer> labelPos = new LinkedHashMap<String, Integer>();
+            for (int i = 0; i < result.size(); i++) {
+                IntermediateInstruction ins = result.get(i);
+                if (ins.operator.equals("LABEL")) {
+                    labelPos.put(ins.result, i);
+                }
+            }
+
+            // Buscar back-edges: GOTO L donde pos(L) < pos(GOTO)
+            for (int gotoIdx = 0; gotoIdx < result.size(); gotoIdx++) {
+                IntermediateInstruction gotoIns = result.get(gotoIdx);
+                if (!gotoIns.operator.equals("GOTO")) continue;
+                if (!labelPos.containsKey(gotoIns.result)) continue;
+
+                int labelIdx = labelPos.get(gotoIns.result);
+                if (labelIdx >= gotoIdx) continue; // No es back-edge
+
+                // Cuerpo del ciclo: [labelIdx .. gotoIdx] inclusive
+                // Variables escritas en el cuerpo
+                Set<String> modified = new HashSet<String>();
+                for (int i = labelIdx; i <= gotoIdx; i++) {
+                    IntermediateInstruction ins = result.get(i);
+                    if (ins.result != null
+                            && !ins.operator.equals("LABEL")
+                            && !ins.operator.equals("IFT")
+                            && !ins.operator.equals("GOTO")) {
+         
+                        modified.add(ins.result);
+                    }
+                }
+
+                // Identificar invariantes dentro del cuerpo (labelIdx+1 .. gotoIdx-1)
+                List<IntermediateInstruction> toHoist  = new ArrayList<IntermediateInstruction>();
+                List<Integer>                hoistIdxs = new ArrayList<Integer>();
+                for (int i = labelIdx + 1; i < gotoIdx; i++) {
+                    IntermediateInstruction ins = result.get(i);
+                    // Solo instrucciones de cómputo
+                    if (ins.operator.equals("LABEL") || ins.operator.equals("GOTO")
+                            || ins.operator.equals("IFT")  || ins.operator.equals("WRITE")
+                            || ins.operator.equals("READ")  || ins.operator.equals("NEWMAT")) continue;
+                    
+                    if (ins.result == null) continue;
+
+                    // Los argumentos no deben ser variables modificadas en el ciclo
+                    boolean arg1Safe = ins.arg1 == null
+                            || OptimizerUtils.isLiteral(ins.arg1)
+                            || !modified.contains(ins.arg1);
+                    boolean arg2Safe = ins.arg2 == null
+                            || OptimizerUtils.isLiteral(ins.arg2)
+                            || !modified.contains(ins.arg2);
+
+                    // El propio result no debe redefinirse más adelante en el ciclo
+                    // (comprobamos si aparece en más de una escritura)
+                    int defCount = 0;
+                    for (int j = labelIdx; j <= gotoIdx; j++) {
+                        if (result.get(j).result != null
+                                && result.get(j).result.equals(ins.result)) defCount++;
+                    }
+
+                    if (arg1Safe && arg2Safe && defCount == 1) {
+                        toHoist.add(ins);
+                        hoistIdxs.add(i);
+                        changed = true;
+                    }
+                }
+
+                if (!toHoist.isEmpty()) {
+                    // Eliminar del cuerpo de atrás hacia adelante
+                    for (int i = hoistIdxs.size() - 1; i >= 0; i--) {
+                        result.remove((int) hoistIdxs.get(i));
+                    }
+                    // Recalcular posición del LABEL (puede haber cambiado tras eliminación)
+                    int newLabelIdx = -1;
+                    for (int i = 0; i < result.size(); i++) {
+                        if (result.get(i).operator.equals("LABEL")
+                                && result.get(i).result != null
+                                && result.get(i).result.equals(gotoIns.result)) {
+                            newLabelIdx = i;
+                            break;
+                        }
+                    }
+                    if (newLabelIdx >= 0) result.addAll(newLabelIdx, toHoist);
+                    break; // reiniciar con mapa de posiciones actualizado
+                }
+            }
+        }
+        return result;
+    }
+}
+
+// ============================================================
+// 4. ELIMINACIÓN DE CÓDIGO MUERTO (DCE)
+//
+// PROBLEMA ANTERIOR:
+//   - El regex "t\d+" estaba mal escapado → en JavaCC el string Java
+//     dentro de acciones necesita doble escape: "t\\d+"
+//     Sin el doble escape nunca matcheaba y NO se eliminaba nada.
+//   - No eliminaba copias puras de variables de usuario sin usos.
+//
+// SOLUCIÓN:
+//   Bucle hasta punto fijo:
+//     1. Recopilar todas las variables USADAS:
+//        - Aparecen en arg1 o arg2 de cualquier instrucción.
+//        - El destino de IFT (etiqueta) se considera "usado".
+//        - Los WRITE consumen su arg1.
+//     2. Una instrucción es "muerta" si su result no está en "used" Y:
+//        a) Es un temporal (t\\d+ o t_*), O
+//        b) Es una copia pura (op="=", arg2=null) de variable de usuario.
+//     3. Eliminarla y repetir: eliminar t2 puede hacer que t1 (que
+//        solo alimentaba a t2) también quede muerto.
+//
+// ANTES:  t1=a+b | e=t1 | f=t1 | WRITE x   (e y f no se usan)
+// DESPUÉS: t1=a+b | WRITE x
+// ============================================================
+class DeadCodeElimination implements Optimizer {
+    public List<IntermediateInstruction> optimize(List<IntermediateInstruction> code) {
+        boolean changed = true;
+        List<IntermediateInstruction> current = new ArrayList<IntermediateInstruction>(code);
+
+        while (changed) {
+            changed = false;
+            // Recopilar variables usadas como operandos
+            Set<String> used = new HashSet<String>();
+            for (IntermediateInstruction ins : current) {
+                if (ins.arg1 != null) used.add(ins.arg1);
+                if (ins.arg2 != null) used.add(ins.arg2);
+                // El destino del salto en IFT se considera "usado" (es una etiqueta)
+                if (ins.operator.equals("IFT") && ins.result != null) used.add(ins.result);
+            }
+
+            List<IntermediateInstruction> clean = new ArrayList<IntermediateInstruction>();
+            for (IntermediateInstruction ins : current) {
+                boolean isDead = false;
+                if (ins.result != null && !used.contains(ins.result)) {
+                    // [NUEVO] Eliminamos TODO lo que no se use (sea temporal o variable del usuario)
+                    // Protegemos operaciones críticas que no deben borrarse aunque su resultado no se lea
+                    if (!ins.operator.equals("READ") && 
+                        !ins.operator.equals("NEWMAT") && 
+                        !ins.operator.equals("WRITE") && 
+                        !ins.operator.equals("LABEL") &&
+                        !ins.operator.equals("GOTO")) {
+                        isDead = true;
+                    }
+                }
+                if (isDead) {
+                    changed = true;
+                } else {
+                    clean.add(ins);
+                }
+            }
+            current = clean;
+        }
+        return current;
+    }
+}
+
+// ============================================================
+// PIPELINE DE OPTIMIZACIÓN
+// Orden: Peephole -> CSE → CopyPropagation → LICM → DCE
+// Se ejecuta el pipeline hasta asegurar convergencia total.
+// ============================================================
+class OptimizationPipeline {
+    private List<Optimizer> optimizers = new ArrayList<Optimizer>();
+
+    public void addOptimizer(Optimizer opt) { optimizers.add(opt); }
+
+    public List<IntermediateInstruction> run(List<IntermediateInstruction> code) {
+        List<IntermediateInstruction> result = new ArrayList<IntermediateInstruction>(code);
+        int prevSize = -1;
+        
+        // Ejecutar TODAS las optimizaciones en bucle hasta que el tamaño de la lista ya no se reduzca
+        while (result.size() != prevSize) {
+            prevSize = result.size();
+            for (Optimizer opt : optimizers) {
+                result = opt.optimize(result);
+            }
+        }
+        return result;
+    }
+}
+
+// ============================================================
+// SYMBOL TABLE
+// ============================================================
+class Symbol {
+    String name, type; int dim1, dim2, address; String scope;
+    public Symbol(String name, String type, int address, String scope) {
+        this.name = name;
+        this.type = type; this.address = address; this.scope = scope;
+    }
+    public Symbol(String name, int d1, int d2, int addr, String scope) {
+        this.name = name;
+        this.type = "MATRIX"; this.dim1 = d1; this.dim2 = d2;
+        this.address = addr; this.scope = scope;
+    }
+}
+
+class MemoryManager {
+    private int nextFreeAddress = 0;
+    public int allocate(String type) { int a = nextFreeAddress;
+        nextFreeAddress += 4; return a; }
+    public int allocate(int totalSize) { int a = nextFreeAddress;
+        nextFreeAddress += totalSize; return a; }
+}
+
+class SymbolTable {
+    private Map<String, Symbol> table = new HashMap<String, Symbol>();
+    private MemoryManager memoryManager;
+    private String currentScope = "GLOBAL";
+
+    public SymbolTable(MemoryManager mm) { this.memoryManager = mm; }
+
+    public void setScope(String scope) { this.currentScope = scope; }
+    public String getScope() { return currentScope; }
+
+    public boolean addVariable(String name, String type) {
+        String key = (name + "@" + currentScope).toUpperCase();
+        if (table.containsKey(key)) return false;
+        int addr = memoryManager.allocate(type);
+        table.put(key, new Symbol(name, type, addr, currentScope));
+        return true;
+    }
+
+    public boolean addMatrix(String name, int d1, int d2) {
+        String key = (name + "@" + currentScope).toUpperCase();
+        if (table.containsKey(key)) return false;
+        int addr = memoryManager.allocate(d1 * d2 * 4);
+        table.put(key, new Symbol(name, d1, d2, addr, currentScope));
+        return true;
+    }
+
+    public Symbol lookup(String name) {
+        String key = (name + "@" + currentScope).toUpperCase();
+        if (table.containsKey(key)) return table.get(key);
+        key = (name + "@GLOBAL").toUpperCase();
+        return table.get(key);
+    }
+
+    public boolean isDeclared(String name) { return lookup(name) != null; }
+}
+
+// ============================================================
+// SEMANTIC ERROR
+// ============================================================
+class SemanticError {
+    int line, column; String description, expected, suggestion;
+    public SemanticError(int line, int column, String description, String expected, String suggestion) {
+        this.line = line;
+        this.column = column;
+        this.description = description; this.expected = expected; this.suggestion = suggestion;
+    }
+    public String toString() {
+        return "\n==================================================\n" +
+               "ERROR SEMANTICO\n\n" +
+               "Linea: " + line + "\n" +
+               "Columna: " + column + "\n\n" +
+               "Descripcion: " + description + "\n\n" +
+               "Se esperaba: " + expected + "\n\n" +
+               "Sugerencia: " + suggestion + "\n" +
+               "==================================================";
+    }
+}
+
+// ============================================================
+// CODE GENERATOR WALKER
+// ============================================================
+class CodeGeneratorWalker {
+    private SymbolTable symbolTable;
+    private List<SemanticError> errors;
+    private List<IntermediateInstruction> code;
+    private int tempCounter = 0;
+
+    public CodeGeneratorWalker(SymbolTable st, List<SemanticError> errors, List<IntermediateInstruction> code) {
+        this.symbolTable = st;
+        this.errors = errors; this.code = code;
+    }
+
+    private String newTemp() { return "t" + (++tempCounter); }
+
+    public ExpressionResult walk(ExprNode node) { return walk(node, 0, 0); }
+
+    public ExpressionResult walk(ExprNode node, int line, int col) {
+        if (node instanceof LiteralNode) {
+            LiteralNode n = (LiteralNode) node;
+            return new ExpressionResult(n.value, n.type);
+        }
+        if (node instanceof VariableNode) {
+            VariableNode n = (VariableNode) node;
+            Symbol s = symbolTable.lookup(n.name);
+            if (s == null) {
+                errors.add(new SemanticError(line, col,
+                    "Variable '" + n.name + "' no ha sido declarada.",
+                    "Una variable previamente declarada con SET o READ.",
+                    "Declare la variable antes de usarla: SET " + n.name + " TO <valor>;"));
+                return new ExpressionResult(n.name, "UNKNOWN");
+            }
+            return new ExpressionResult(n.name, s.type);
+        }
+        if (node instanceof MatrixAccessNode) {
+            MatrixAccessNode n = (MatrixAccessNode) node;
+            Symbol s = symbolTable.lookup(n.name);
+            if (s == null) {
+                errors.add(new SemanticError(line, col,
+                    "Matriz '" + n.name + "' no ha sido declarada.",
+                    "Una matriz declarada con NEW MATRIX.",
+                    "Declare la matriz: NEW MATRIX " + n.name + "[dim1][dim2];"));
+                return new ExpressionResult(n.name, "UNKNOWN");
+            }
+            if (!s.type.equals("MATRIX")) {
+                errors.add(new SemanticError(line, col,
+                    "'" + n.name + "' no es una matriz.",
+                    "Una variable de tipo MATRIX.",
+                    "Use una variable declarada como matriz."));
+                return new ExpressionResult(n.name, "UNKNOWN");
+            }
+            ExpressionResult r = walk(n.row, line, col);
+            ExpressionResult c = walk(n.col, line, col);
+            String temp = newTemp();
+            code.add(new IntermediateInstruction("MATGET", n.name, r.operand + "," + c.operand, temp));
+            return new ExpressionResult(temp, "REAL");
+        }
+        if (node instanceof UnaryOpNode) {
+            UnaryOpNode n = (UnaryOpNode) node;
+            ExpressionResult operand = walk(n.operand, line, col);
+            if (n.operator.equals("NOT")) {
+                if (!operand.type.equals("BOOLEAN") && !operand.type.equals("UNKNOWN")) {
+                    errors.add(new SemanticError(line, col,
+                        "Operador NOT aplicado a tipo '" + operand.type + "'.",
+                        "Tipo BOOLEAN.",
+                        "Use NOT solo con expresiones booleanas."));
+                }
+                String temp = newTemp();
+                code.add(new IntermediateInstruction("NOT", operand.operand, null, temp));
+                return new ExpressionResult(temp, "BOOLEAN");
+            }
+            if (n.operator.equals("NEG")) {
+                if (!isNumeric(operand.type) && !operand.type.equals("UNKNOWN")) {
+                    errors.add(new SemanticError(line, col,
+                        "Negacion unaria aplicada a tipo '" + operand.type + "'.",
+                        "Tipo INTEGER o REAL.",
+                        "Use el operador '-' solo con valores numericos."));
+                }
+                String temp = newTemp();
+                code.add(new IntermediateInstruction("NEG", operand.operand, null, temp));
+                return new ExpressionResult(temp, operand.type);
+            }
+            return operand;
+        }
+        if (node instanceof BinaryOpNode) {
+            BinaryOpNode n = (BinaryOpNode) node;
+            ExpressionResult left  = walk(n.left,  line, col);
+            ExpressionResult right = walk(n.right, line, col);
+            String op = n.operator;
+            String resultType = "UNKNOWN";
+
+            if (op.equals("+") || op.equals("-") || op.equals("*") || op.equals("/")) {
+                if (!isNumeric(left.type) && !left.type.equals("UNKNOWN")) {
+                    errors.add(new SemanticError(line, col,
+                        "Operacion aritmetica '" + op + "' con tipo no numerico '" + left.type + "'.",
+                        "Tipo INTEGER o REAL.",
+                        "Use solo valores numericos en operaciones aritmeticas."));
+                } else if (!isNumeric(right.type) && !right.type.equals("UNKNOWN")) {
+                    errors.add(new SemanticError(line, col,
+                        "Operacion aritmetica '" + op + "' con tipo no numerico '" + right.type + "'.",
+                        "Tipo INTEGER o REAL.",
+                        "Use solo valores numericos en operaciones aritmeticas."));
+                } else if (isNumeric(left.type) && isNumeric(right.type)) {
+                    if (!left.type.equals(right.type)) {
+                        errors.add(new SemanticError(line, col,
+                            "Mezcla de tipos '" + left.type + "' y '" + right.type + "' en operacion aritmetica.",
+                            "Ambos operandos del mismo tipo numerico.",
+                            "Asegurese de que ambos operandos sean INTEGER o ambos REAL."));
+                    }
+                    resultType = (left.type.equals("REAL") || right.type.equals("REAL")) ?
+                        "REAL" : "INTEGER";
+                }
+            } else if (op.equalsIgnoreCase("AND") || op.equalsIgnoreCase("OR")) {
+                if (!left.type.equals("BOOLEAN") && !left.type.equals("UNKNOWN")) {
+                    errors.add(new SemanticError(line, col,
+                        "Operacion logica '" + op + "' con tipo no booleano '" + left.type + "'.",
+                        "Tipo BOOLEAN.",
+                        "Use solo valores booleanos con AND / OR."));
+                }
+                if (!right.type.equals("BOOLEAN") && !right.type.equals("UNKNOWN")) {
+                    errors.add(new SemanticError(line, col,
+                        "Operacion logica '" + op + "' con tipo no booleano '" + right.type + "'.",
+                        "Tipo BOOLEAN.",
+                        "Use solo valores booleanos con AND / OR."));
+                }
+                resultType = "BOOLEAN";
+            } else if (op.equals("==") || op.equals("!=")) {
+                if (!left.type.equals("UNKNOWN") && !right.type.equals("UNKNOWN") &&
+                    !left.type.equals(right.type)) {
+                    errors.add(new SemanticError(line, col,
+                        "Comparacion '" + op + "' entre tipos incompatibles '" + left.type + "' y '" + right.type + "'.",
+                        "Ambos operandos del mismo tipo.",
+                        "Compare valores del mismo tipo."));
+                }
+                resultType = "BOOLEAN";
+            } else if (op.equals(">") || op.equals(">=") || op.equals("<") || op.equals("<=")) {
+                if (!isNumeric(left.type) && !left.type.equals("UNKNOWN")) {
+                    errors.add(new SemanticError(line, col,
+                        "Comparacion '" + op + "' con tipo no numerico '" + left.type + "'.",
+                        "Tipo INTEGER o REAL.",
+                        "Use solo numeros en comparaciones de orden."));
+                }
+                if (!isNumeric(right.type) && !right.type.equals("UNKNOWN")) {
+                    errors.add(new SemanticError(line, col,
+                        "Comparacion '" + op + "' con tipo no numerico '" + right.type + "'.",
+                        "Tipo INTEGER o REAL.",
+                        "Use solo numeros en comparaciones de orden."));
+                }
+                resultType = "BOOLEAN";
+            }
+
+            String temp = newTemp();
+            code.add(new IntermediateInstruction(op, left.operand, right.operand, temp));
+            return new ExpressionResult(temp, resultType);
+        }
+        return new ExpressionResult("error", "UNKNOWN");
+    }
+
+    private boolean isNumeric(String type) {
+        return type.equals("INTEGER") || type.equals("REAL");
+    }
+}
+
+class ExpressionResult {
+    String operand, type;
+    public ExpressionResult(String operand, String type) { this.operand = operand;
+        this.type = type; }
+}
+
+// ============================================================
+// MAIN PARSER CLASS
+// ============================================================
+public class Felix {
+    private MemoryManager memoryManager = new MemoryManager();
+    private SymbolTable symbolTable = new SymbolTable(memoryManager);
+    private List<SemanticError> semanticErrors = new ArrayList<SemanticError>();
+    // [CAMBIO 3] Lista para acumular errores léxicos sin detener el análisis
+    public List<String> lexicErrors = new ArrayList<String>();
+    private List<IntermediateInstruction> intermediateCode = new ArrayList<IntermediateInstruction>();
+    private Stack<ExprNode> semanticStack = new Stack<ExprNode>();
+    private int labelCounter = 0;
+    private String newLabel() { return "L" + (++labelCounter); }
+
+    private CodeGeneratorWalker walker() {
+        return new CodeGeneratorWalker(symbolTable, semanticErrors, intermediateCode);
+    }
+
+    // [CAMBIO 3] Inyecta la referencia del parser en el TokenManager para que
+    // el token ERROR pueda registrar errores léxicos en lexicErrors.
+    private void initTokenManager() {
+        token_source.parserRef = this;
+    }
+
+    public static void main(String[] args) {
+        // Archivo fuente
+        java.io.InputStream inputStream = System.in;
+        String sourceFileName = "entrada";
+
+        if (args.length > 0) {
+            sourceFileName = args[0];
+            try {
+                inputStream = new java.io.FileInputStream(args[0]);
+            } catch (java.io.FileNotFoundException ex) {
+                System.out.println("ERROR: No se encontró el archivo '" + args[0] + "'.");
+                System.exit(1);
+            }
+        }
+
+        // Nombre del .txt de salida
+        String baseName = sourceFileName;
+        int dotIndex = sourceFileName.lastIndexOf('.');
+        if (dotIndex > 0) baseName = sourceFileName.substring(0, dotIndex);
+        String outputFileName = baseName + "_cuadruples.txt";
+        // Timestamp
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        java.time.format.DateTimeFormatter fmt =
+            java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
+        String timestamp = now.format(fmt);
+        // [CAMBIO 3] Analizar: se acumulan errores léxicos con la lista lexicErrors
+        // en lugar de lanzar excepción y detener el análisis en el primer token inválido.
+        Felix parser = new Felix(inputStream);
+        boolean syntaxError = false;
+        String syntaxErrorDetail = "";
+        try {
+            parser.Start();
+        } catch (ParseException e) {
+            // [CAMBIO 3] Error sintáctico: se registra el detalle pero NO se aborta;
+            // los errores semánticos ya acumulados siguen siendo válidos.
+            syntaxError = true;
+            syntaxErrorDetail =
+                "Línea " + e.currentToken.next.beginLine +
+                ", Columna " + e.currentToken.next.beginColumn + ": " +
+                traducirExpectedTokens(e);
+        } catch (TokenMgrError e) {
+            // [CAMBIO 3] Error léxico fatal (TokenMgrError ya no debería llegar aquí
+            // porque el token ERROR del lexer lo captura, pero se conserva por seguridad).
+            syntaxError = true;
+            syntaxErrorDetail = "Carácter no reconocido (error léxico).";
+        }
+
+        // [CAMBIO 2] Determinar si hay CUALQUIER tipo de error antes de escribir el archivo
+        boolean hayErrores = syntaxError
+            || !parser.semanticErrors.isEmpty()
+            || !parser.lexicErrors.isEmpty();
+        // ── Terminal: mostrar todos los errores acumulados ─────────────────
+        // [CAMBIO 2] Mensajes con tildes correctas
+        if (!parser.lexicErrors.isEmpty()) {
+            System.out.println("\n==================================================");
+            System.out.println("ERRORES LÉXICOS DETECTADOS (" + parser.lexicErrors.size() + "):");
+            System.out.println("==================================================");
+            for (String le : parser.lexicErrors) {
+                System.out.println(le);
+            }
+        }
+
+        if (syntaxError) {
+            System.out.println("\n==================================================");
+            System.out.println("ERROR SINTÁCTICO");
+            System.out.println("\nDetalle: " + syntaxErrorDetail);
+            System.out.println("==================================================");
+        }
+
+        if (!parser.semanticErrors.isEmpty()) {
+            for (SemanticError err : parser.semanticErrors) {
+                System.out.println(err);
+            }
+        }
+
+        // Estado final en terminal
+        if (hayErrores) {
+            int total = parser.lexicErrors.size()
+                      + (syntaxError ? 1 : 0)
+                      + parser.semanticErrors.size();
+            System.out.println("\n==================================================");
+            System.out.println("ESTADO FINAL: Compilación con " + total + " error(es). No se generó código intermedio.");
+            System.out.println("==================================================\n");
+        } else {
+            System.out.println("\n==================================================");
+            System.out.println("ESTADO FINAL: Análisis exitoso. Sin errores.");
+            System.out.println("==================================================\n");
+        }
+
+        // [CAMBIO 1] El archivo de cuádruples SOLO se genera si NO hay errores
+        if (!hayErrores) {
+            
+            // --- 1. GENERAR ARCHIVO SIN OPTIMIZAR ---
+            StringBuilder sbUnopt = new StringBuilder();
+            sbUnopt.append("==================================================\n");
+            sbUnopt.append("  COMPILADOR FELIX - CÓDIGO INTERMEDIO (Sin Optimizar)\n");
+            sbUnopt.append("==================================================\n");
+            sbUnopt.append("Archivo fuente : ").append(sourceFileName).append("\n");
+            sbUnopt.append("Fecha y hora   : ").append(timestamp).append("\n");
+            sbUnopt.append("==================================================\n\n");
+            sbUnopt.append(String.format("%-6s %-12s %-14s %-14s %-12s\n", "No.", "Operador", "Argumento 1", "Argumento 2", "Resultado"));
+            sbUnopt.append("--------------------------------------------------\n");
+            int idx1 = 0;
+            for (IntermediateInstruction ins : parser.intermediateCode) {
+                sbUnopt.append(String.format("%-6d %-12s %-14s %-14s %-12s\n", idx1++, ins.operator, 
+                    ins.arg1 != null ? ins.arg1 : "-", ins.arg2 != null ? ins.arg2 : "-", ins.result != null ? ins.result : "-"));
+            }
+            sbUnopt.append("--------------------------------------------------\n");
+            sbUnopt.append("Total de instrucciones: ").append(parser.intermediateCode.size()).append("\n");
+            sbUnopt.append("==================================================\n");
+            String unoptFileName = baseName + "_cuadruples_unopt.txt";
+            java.io.PrintWriter pwUnopt = null;
+            try {
+                pwUnopt = new java.io.PrintWriter(new java.io.OutputStreamWriter(new java.io.FileOutputStream(unoptFileName), "UTF-8"));
+                pwUnopt.print(sbUnopt.toString());
+            } catch (Exception ex) {
+            } finally { if (pwUnopt != null) pwUnopt.close();
+            }
+
+            // --- 2. PASAR POR EL PIPELINE DE OPTIMIZACIÓN ---
+            OptimizationPipeline pipeline = new OptimizationPipeline();
+            pipeline.addOptimizer(new PeepholeOptimizer());
+            pipeline.addOptimizer(new CommonSubexpressionElimination());
+            pipeline.addOptimizer(new CopyPropagation());
+            pipeline.addOptimizer(new LoopInvariantCodeMotion());
+            pipeline.addOptimizer(new DeadCodeElimination());
+            List<IntermediateInstruction> finalCode = pipeline.run(parser.intermediateCode);
+            // --- 3. GENERAR ARCHIVO OPTIMIZADO ---
+            StringBuilder sbOpt = new StringBuilder();
+            sbOpt.append("==================================================\n");
+            sbOpt.append("  COMPILADOR FELIX - CÓDIGO INTERMEDIO (Optimizados)\n");
+            sbOpt.append("==================================================\n");
+            sbOpt.append("Archivo fuente : ").append(sourceFileName).append("\n");
+            sbOpt.append("Fecha y hora   : ").append(timestamp).append("\n");
+            sbOpt.append("==================================================\n\n");
+            sbOpt.append(String.format("%-6s %-12s %-14s %-14s %-12s\n", "No.", "Operador", "Argumento 1", "Argumento 2", "Resultado"));
+            sbOpt.append("--------------------------------------------------\n");
+            int idx2 = 0;
+            for (IntermediateInstruction ins : finalCode) {
+                sbOpt.append(String.format("%-6d %-12s %-14s %-14s %-12s\n", idx2++, ins.operator, 
+                    ins.arg1 != null ? ins.arg1 : "-", ins.arg2 != null ? ins.arg2 : "-", ins.result != null ? ins.result : "-"));
+            }
+            sbOpt.append("--------------------------------------------------\n");
+            sbOpt.append("Total de instrucciones: ").append(finalCode.size()).append("\n");
+            sbOpt.append("==================================================\n");
+            String optFileName = baseName + "_cuadruples_opt.txt";
+            java.io.PrintWriter pwOpt = null;
+            try {
+                pwOpt = new java.io.PrintWriter(new java.io.OutputStreamWriter(new java.io.FileOutputStream(optFileName), "UTF-8"));
+                pwOpt.print(sbOpt.toString());
+                System.out.println("Archivos generados exitosamente: \n- " + unoptFileName + "\n- " + optFileName);
+            } catch (Exception ex) {
+            } finally { if (pwOpt != null) pwOpt.close();
+            }
+            
+        } 
+    } 
+
+    static String getCustomTokenName(int kind) {
+        switch (kind) {
+            case SET:             return "SET";
+            case TO:              return "TO";
+            case WRITE:           return "WRITE";
+            case INTEGER_LIT:     return "[ENTERO]";
+            case REAL_LIT:        return "[REAL]";
+            case IDENTIFIER:      return "[IDENTIFICADOR]";
+            case STRING_LITERAL:  return "[CADENA]";
+            case EOF:             return "[FIN DE ARCHIVO]";
+            case SWITCH:          return "SWITCH";
+            default:              return FelixConstants.tokenImage[kind];
+        }
+    }
+
+    static String traducirExpectedTokens(ParseException e) {
+        if (e.expectedTokenSequences == null) return e.getMessage();
+        Set<String> expected = new HashSet<String>();
+        for (int[] seq : e.expectedTokenSequences) {
+            if (seq.length > 0) expected.add(getCustomTokenName(seq[0]));
+        }
+        return "Se esperaba uno de: " + String.join(", ", expected);
+    }
+}
+
+PARSER_END(Felix)
+
+// ============================================================
+// LEXER
+// ============================================================
+// [CAMBIO 3] TOKEN_MGR_DECLS: permite acceder al parser desde el manejador de tokens
+// para registrar errores léxicos sin detener el análisis.
+TOKEN_MGR_DECLS : {
+    Felix parserRef = null;
+}
+
+SKIP : { " " | "\t" | "\n" |
+"\r" }
+
+TOKEN : {
+    < SET:          "SET"          > |
+    < TO:           "TO"          > |
+    < WRITE:        "WRITE"        > |
+    < READ:          "READ"        > |
+    < IF:           "IF"           > |
+    < THEN:          "THEN"        > |
+    < ELSE:         "ELSE"         > |
+    < ENDIF:         "ENDIF"       > |
+    < NEW:          "NEW"          > |
+    < MATRIX:        "MATRIX"      > |
+    < AND:          "AND"          > |
+    < OR:            "OR"          > |
+    < NOT:          "NOT"          > |
+    < TRUE:          "TRUE"        > |
+    < FALSE:        "FALSE"        > |
+    < WHILE:         "WHILE"       > |
+    < DO:           "DO"           > |
+    < ENDWHILE:      "ENDWHILE"    > |
+    < FOR:          "FOR"          > |
+    < ENDFOR:        "ENDFOR"      > |
+    < SWITCH:       "SWITCH"       > |
+    < CASE:          "CASE"        > |
+    < DEFAULT_CASE: "DEFAULT_CASE" > | < ENDSWITCH:     "ENDSWITCH"   > |
+    < SEMICOLON:    ";"            > | < PLUS:          "+"           > |
+    < MINUS:        "-"            > |
+    < TIMES:         "*"           > |
+    < DIV:          "/"            > |
+    < LPAREN:        "("           > |
+    < RPAREN:       ")"            > |
+    < LBRACKET:      "["           > |
+    < RBRACKET:     "]"            > |
+    < EQ:            "=="          > |
+    < NEQ:          "!="           > |
+    < GE:            ">="          > |
+    < LE:           "<="           > |
+    < GT:            ">"           > |
+    < LT:           "<"            > |
+    < ASSIGN_OP:     "="           >
+}
+
+TOKEN : {
+    < REAL_LIT:    (["0"-"9"])+ "."
+(["0"-"9"])+ > |
+    < INTEGER_LIT: (["0"-"9"])+ >
+}
+
+TOKEN : {
+    < IDENTIFIER:     (["a"-"z","A"-"Z","_"])(["a"-"z","A"-"Z","0"-"9","_"])* > |
+    < STRING_LITERAL: "\"" (~["\"","\n","\r"])* "\"" >
+}
+
+// [CAMBIO 3] Token ERROR con acción léxica: acumula el error en lexicErrors
+// y CONTINÚA el análisis en lugar de lanzar TokenMgrError.
+<*> TOKEN : {
+    < ERROR: ~[] > {
+        if (parserRef != null) {
+            parserRef.lexicErrors.add(
+                "\n==================================================\n" +
+                "ERROR LÉXICO\n\n" +
+                "Línea: " + input_stream.getBeginLine() + "\n" +
+                "Columna: " + input_stream.getBeginColumn() + "\n\n" +
+                "Descripción: Caracter no reconocido: '" + image + "'\n\n" +
+                "Sugerencia: Elimine o reemplace el caracter inválido.\n" +
+                "=================================================="
+            );
+        }
+    }
+}
+
+// ============================================================
+// GRAMMAR
+// ============================================================
+// [CAMBIO 3] Se llama a initTokenManager() para registrar errores léxicos
+// acumulativamente sin lanzar excepción al encontrar caracteres inválidos.
+void Start() : {} {
+    { initTokenManager();
+    }
+    ( Statement() )* <EOF>
+}
+
+void Statement() : {} {
+    ( Asignacion() | EscribirTexto() | LeerVariable() | Condicional()
+    | DeclararMatriz() | WhileStatement() | ForStatement() | SwitchStatement() )
+}
+
+void Asignacion() : { Token id;
+    ExprNode tree; int line, col; } {
+    <SET> id=<IDENTIFIER> { line = id.beginLine; col = id.beginColumn;
+    }
+    <TO> Expression() <SEMICOLON> {
+        tree = semanticStack.pop();
+        ExpressionResult res = walker().walk(tree, line, col);
+        String varType = res.type.equals("UNKNOWN") ? "INTEGER" : res.type;
+        Symbol existing = symbolTable.lookup(id.image);
+        if (existing != null) {
+            if (!existing.type.equals(varType) && !varType.equals("UNKNOWN") && !existing.type.equals("UNKNOWN")) {
+                semanticErrors.add(new SemanticError(line, col,
+                    "Asignacion incompatible: variable '" + id.image + "' es de tipo '" + existing.type +
+                    "' pero se intenta asignar tipo '" + varType + "'.",
+                    "Tipo " + existing.type + ".",
+                    "Asigne un valor de tipo " + existing.type + " a la variable."));
+            }
+        } else {
+            symbolTable.addVariable(id.image, varType);
+        }
+        intermediateCode.add(new IntermediateInstruction("=", res.operand, null, id.image));
+    }
+}
+
+void EscribirTexto() : { ExprNode tree;
+    Token t; } {
+    <WRITE> { t = token;
+    } Expression() <SEMICOLON> {
+        tree = semanticStack.pop();
+        ExpressionResult res = walker().walk(tree, t.beginLine, t.beginColumn);
+        intermediateCode.add(new IntermediateInstruction("WRITE", res.operand, null, null));
+    }
+}
+
+void DeclararMatriz() : { Token id, d1, d2;
+    } {
+    <NEW> <MATRIX> id=<IDENTIFIER>
+    <LBRACKET> d1=<INTEGER_LIT> <RBRACKET>
+    <LBRACKET> d2=<INTEGER_LIT> <RBRACKET> <SEMICOLON> {
+        boolean ok = symbolTable.addMatrix(id.image,
+            Integer.parseInt(d1.image), Integer.parseInt(d2.image));
+        if (!ok) {
+            semanticErrors.add(new SemanticError(id.beginLine, id.beginColumn,
+                "Declaración duplicada de matríz '" + id.image + "'.",
+                "Un nombre de matríz no declarado previamente.",
+                "Use un nombre diferente para la matríz."));
+        }
+        intermediateCode.add(new IntermediateInstruction("NEWMAT",
+            id.image, d1.image + "x" + d2.image, null));
+    }
+}
+
+void LeerVariable() : { Token id; } {
+    <READ> id=<IDENTIFIER> <SEMICOLON> {
+        if (!symbolTable.isDeclared(id.image)) {
+            symbolTable.addVariable(id.image, "UNKNOWN");
+        }
+        intermediateCode.add(new IntermediateInstruction("READ", null, null, id.image));
+    }
+}
+
+// ============================================================
+// EXPRESSIONS
+// ============================================================
+void Expression() : { Token op; } {
+    Term() ( ( op=<PLUS> | op=<MINUS> | op=<EQ> | op=<GT> | op=<GE>
+             | op=<LT> | op=<LE> | op=<NEQ> | op=<AND> | op=<OR> ) Term() {
+        ExprNode r = semanticStack.pop(); ExprNode l = semanticStack.pop();
+        semanticStack.push(new BinaryOpNode(op.image, l, r));
+    } )*
+}
+
+void Term() : { Token op;
+    } {
+    Factor() ( ( op=<TIMES> | op=<DIV> ) Factor() {
+        ExprNode r = semanticStack.pop(); ExprNode l = semanticStack.pop();
+        semanticStack.push(new BinaryOpNode(op.image, l, r));
+    } )*
+}
+
+void Factor() : { Token t;
+    } {
+      t=<INTEGER_LIT>    { semanticStack.push(new LiteralNode(t.image, "INTEGER")); }
+    |
+    t=<REAL_LIT>       { semanticStack.push(new LiteralNode(t.image, "REAL")); }
+    |
+    t=<STRING_LITERAL> { semanticStack.push(new LiteralNode(t.image, "STRING")); }
+    |
+    <TRUE>             { semanticStack.push(new LiteralNode("true",  "BOOLEAN"));
+    }
+    | <FALSE>            { semanticStack.push(new LiteralNode("false", "BOOLEAN"));
+    }
+    | <NOT> Factor() {
+        ExprNode notOperand = semanticStack.pop();
+        semanticStack.push(new UnaryOpNode("NOT", notOperand));
+    }
+    | <MINUS> Factor() {
+        ExprNode negOperand = semanticStack.pop();
+        semanticStack.push(new UnaryOpNode("NEG", negOperand));
+    }
+    | LOOKAHEAD(2) t=<IDENTIFIER> <LBRACKET> {
+        ExprNode rowExpr, colExpr;
+        Expression(); rowExpr = semanticStack.pop();
+    } <RBRACKET> <LBRACKET> {
+        Expression(); colExpr = semanticStack.pop();
+    } <RBRACKET> {
+        semanticStack.push(new MatrixAccessNode(t.image, rowExpr, colExpr));
+    }
+    |
+    t=<IDENTIFIER> { semanticStack.push(new VariableNode(t.image)); }
+    | <LPAREN> Expression() <RPAREN>
+}
+
+// ============================================================
+// CONTROL STRUCTURES
+// ============================================================
+void Condicional() : { ExprNode tree;
+    Token t; String lTrue, lFalse, lEnd; } {
+    <IF> { t = token;
+    } Expression() {
+        tree = semanticStack.pop();
+        ExpressionResult res = walker().walk(tree, t.beginLine, t.beginColumn);
+        if (!res.type.equals("BOOLEAN") && !res.type.equals("UNKNOWN")) {
+            semanticErrors.add(new SemanticError(t.beginLine, t.beginColumn,
+                "La condición del IF no es de tipo BOOLEAN (es '" + res.type + "').",
+                "Expresión de tipo BOOLEAN.",
+                "Use una expresión booleana como condición del IF."));
+        }
+        lTrue = newLabel(); lFalse = newLabel(); lEnd = newLabel();
+        intermediateCode.add(new IntermediateInstruction("IFT",   res.operand, null, lTrue));
+        intermediateCode.add(new IntermediateInstruction("GOTO",  null,        null, lFalse));
+        intermediateCode.add(new IntermediateInstruction("LABEL", null,        null, lTrue));
+    }
+    <THEN> (Statement())*
+    [ <ELSE> {
+        intermediateCode.add(new IntermediateInstruction("GOTO",  null, null, lEnd));
+        intermediateCode.add(new IntermediateInstruction("LABEL", null, null, lFalse));
+    } (Statement())* {
+        intermediateCode.add(new IntermediateInstruction("LABEL", null, null, lEnd));
+    } ]
+    <ENDIF> {
+        intermediateCode.add(new IntermediateInstruction("LABEL", null, null, lFalse));
+    }
+}
+
+void WhileStatement() : { ExprNode tree; Token t; String lCond, lBody, lEnd;
+    } {
+    <WHILE> { t = token; lCond = newLabel(); lEnd = newLabel(); lBody = newLabel();
+    intermediateCode.add(new IntermediateInstruction("LABEL", null, null, lCond)); }
+    <LPAREN> Expression() <RPAREN> {
+        tree = semanticStack.pop();
+        ExpressionResult res = walker().walk(tree, t.beginLine, t.beginColumn);
+        if (!res.type.equals("BOOLEAN") && !res.type.equals("UNKNOWN")) {
+            semanticErrors.add(new SemanticError(t.beginLine, t.beginColumn,
+                "La condicion del WHILE no es de tipo BOOLEAN (es '" + res.type + "').",
+                "Expresion de tipo BOOLEAN.",
+                "Use una expresion booleana como condicion del WHILE."));
+        }
+        intermediateCode.add(new IntermediateInstruction("IFT",   res.operand, null, lBody));
+        intermediateCode.add(new IntermediateInstruction("GOTO",  null,        null, lEnd));
+        intermediateCode.add(new IntermediateInstruction("LABEL", null,        null, lBody));
+    }
+    <DO> (Statement())*
+    <ENDWHILE> {
+        intermediateCode.add(new IntermediateInstruction("GOTO",  null, null, lCond));
+        intermediateCode.add(new IntermediateInstruction("LABEL", null, null, lEnd));
+    }
+}
+
+void ForStatement() : { Token id, from, to2; String lCond, lBody, lEnd, condTemp, incTemp;
+    } {
+    <FOR> id=<IDENTIFIER> <ASSIGN_OP> from=<INTEGER_LIT> <TO> to2=<INTEGER_LIT> {
+        symbolTable.addVariable(id.image, "INTEGER");
+        intermediateCode.add(new IntermediateInstruction("=",     from.image,  null,      id.image));
+        lCond = newLabel();
+        lBody = newLabel(); lEnd = newLabel();
+        condTemp = "t_for_" + id.image; incTemp = "t_inc_" + id.image;
+        intermediateCode.add(new IntermediateInstruction("LABEL", null,        null,      lCond));
+        intermediateCode.add(new IntermediateInstruction("<=",    id.image,    to2.image, condTemp));
+        intermediateCode.add(new IntermediateInstruction("IFT",   condTemp,    null,      lBody));
+        intermediateCode.add(new IntermediateInstruction("GOTO",  null,        null,      lEnd));
+        intermediateCode.add(new IntermediateInstruction("LABEL", null,        null,      lBody));
+    }
+    (Statement())*
+    <ENDFOR> {
+        intermediateCode.add(new IntermediateInstruction("+",     id.image,    "1",       incTemp));
+        intermediateCode.add(new IntermediateInstruction("=",     incTemp,     null,      id.image));
+        intermediateCode.add(new IntermediateInstruction("GOTO",  null,        null,      lCond));
+        intermediateCode.add(new IntermediateInstruction("LABEL", null,        null,      lEnd));
+    }
+}
+
+void SwitchStatement() : { Token id, num; String lEnd, lCase, skipLabel, condTemp; } {
+    <SWITCH> id=<IDENTIFIER> {
+        lEnd = newLabel();
+        Symbol s = symbolTable.lookup(id.image);
+        if (s == null) {
+            semanticErrors.add(new SemanticError(id.beginLine, id.beginColumn,
+                "Variable '" + id.image + "' no declarada en SWITCH.",
+                "Una variable previamente declarada.",
+                "Declare la variable antes del SWITCH."));
+        }
+    }
+    ( <CASE> num=<INTEGER_LIT> {
+        lCase     = newLabel();
+        skipLabel = newLabel();
+        condTemp  = "t_sw";
+        intermediateCode.add(new IntermediateInstruction("==",    id.image, num.image, condTemp));
+        intermediateCode.add(new IntermediateInstruction("IFT",   condTemp, null,      lCase));
+        intermediateCode.add(new IntermediateInstruction("GOTO",  null,     null,      skipLabel));
+        intermediateCode.add(new IntermediateInstruction("LABEL", null,     null,      lCase));
+    } (Statement())* {
+        intermediateCode.add(new IntermediateInstruction("GOTO",  null, null, lEnd));
+        intermediateCode.add(new IntermediateInstruction("LABEL", null, null, skipLabel));
+    } )*
+    [ <DEFAULT_CASE> {
+        intermediateCode.add(new IntermediateInstruction("LABEL", null, null, newLabel()));
+    } (Statement())* ]
+    <ENDSWITCH> {
+        intermediateCode.add(new IntermediateInstruction("LABEL", null, null, lEnd));
+    }
+}

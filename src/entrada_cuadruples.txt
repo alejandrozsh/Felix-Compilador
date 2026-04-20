@@ -1,0 +1,129 @@
+==================================================
+  COMPILADOR FELIX - CODIGO INTERMEDIO (Cuadruples)
+==================================================
+
+No.    Operador     Argumento 1    Argumento 2    Resultado   
+--------------------------------------------------
+0      =            9              -              nota1       
+1      =            8              -              nota2       
+2      =            7              -              nota3       
+3      =            "Francisco"    -              nombre      
+4      +            nota1          nota2          t1          
+5      +            t1             nota3          t2          
+6      =            t2             -              suma        
+7      /            suma           3              t1          
+8      =            t1             -              promedio    
+9      WRITE        "=== REPORTE ===" -              -           
+10     WRITE        nombre         -              -           
+11     WRITE        promedio       -              -           
+12     +            nota2          nota3          t1          
+13     =            t1             -              nota1       
+14     =            0              -              nivel       
+15     >=           promedio       90             t1          
+16     IFT          t1             -              L1          
+17     GOTO         -              -              L2          
+18     LABEL        -              -              L1          
+19     =            3              -              nivel       
+20     GOTO         -              -              L3          
+21     LABEL        -              -              L2          
+22     >=           promedio       70             t1          
+23     IFT          t1             -              L4          
+24     GOTO         -              -              L5          
+25     LABEL        -              -              L4          
+26     =            2              -              nivel       
+27     GOTO         -              -              L6          
+28     LABEL        -              -              L5          
+29     >=           promedio       60             t1          
+30     IFT          t1             -              L7          
+31     GOTO         -              -              L8          
+32     LABEL        -              -              L7          
+33     =            1              -              nivel       
+34     LABEL        -              -              L8          
+35     LABEL        -              -              L6          
+36     LABEL        -              -              L5          
+37     LABEL        -              -              L3          
+38     LABEL        -              -              L2          
+39     ==           nivel          3              t_sw        
+40     IFT          t_sw           -              L11         
+41     GOTO         -              -              L12         
+42     LABEL        -              -              L11         
+43     WRITE        "Excelente"    -              -           
+44     GOTO         -              -              L10         
+45     LABEL        -              -              L12         
+46     ==           nivel          2              t_sw        
+47     IFT          t_sw           -              L13         
+48     GOTO         -              -              L14         
+49     LABEL        -              -              L13         
+50     WRITE        "Aprobado"     -              -           
+51     GOTO         -              -              L10         
+52     LABEL        -              -              L14         
+53     ==           nivel          1              t_sw        
+54     IFT          t_sw           -              L15         
+55     GOTO         -              -              L16         
+56     LABEL        -              -              L15         
+57     WRITE        "Minimo aprobatorio" -              -           
+58     GOTO         -              -              L10         
+59     LABEL        -              -              L16         
+60     LABEL        -              -              L17         
+61     WRITE        "Reprobado"    -              -           
+62     LABEL        -              -              L10         
+63     =            1              -              i           
+64     LABEL        -              -              L18         
+65     <=           i              5              t_for_i     
+66     IFT          t_for_i        -              L19         
+67     GOTO         -              -              L20         
+68     LABEL        -              -              L19         
+69     *            promedio       i              t1          
+70     =            t1             -              resultado   
+71     WRITE        resultado      -              -           
+72     +            i              1              t_inc_i     
+73     =            t_inc_i        -              i           
+74     GOTO         -              -              L18         
+75     LABEL        -              -              L20         
+76     =            0              -              intentos    
+77     =            promedio       -              nota_actual 
+78     =            true           -              puede_mejorar
+79     LABEL        -              -              L21         
+80     <            nota_actual    90             t1          
+81     AND          t1             puede_mejorar  t2          
+82     IFT          t2             -              L23         
+83     GOTO         -              -              L22         
+84     LABEL        -              -              L23         
+85     +            nota_actual    5              t1          
+86     =            t1             -              nota_actual 
+87     +            intentos       1              t1          
+88     =            t1             -              intentos    
+89     >=           intentos       5              t1          
+90     IFT          t1             -              L24         
+91     GOTO         -              -              L25         
+92     LABEL        -              -              L24         
+93     =            false          -              puede_mejorar
+94     LABEL        -              -              L25         
+95     GOTO         -              -              L21         
+96     LABEL        -              -              L22         
+97     WRITE        "Intentos necesarios:" -              -           
+98     WRITE        intentos       -              -           
+99     =            true           -              nota_valida 
+100    >=           nota1          0              t1          
+101    NOT          t1             -              t2          
+102    <=           nota1          100            t3          
+103    NOT          t3             -              t4          
+104    OR           t2             t4             t5          
+105    IFT          t5             -              L27         
+106    GOTO         -              -              L28         
+107    LABEL        -              -              L27         
+108    =            false          -              nota_valida 
+109    WRITE        "Nota fuera de rango" -              -           
+110    LABEL        -              -              L28         
+111    IFT          nota_valida    -              L30         
+112    GOTO         -              -              L31         
+113    LABEL        -              -              L30         
+114    WRITE        "Notas validas" -              -           
+115    GOTO         -              -              L32         
+116    LABEL        -              -              L31         
+117    WRITE        "Hay errores en las notas" -              -           
+118    LABEL        -              -              L32         
+119    LABEL        -              -              L31         
+--------------------------------------------------
+Total de instrucciones: 120
+==================================================
