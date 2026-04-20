@@ -3,13 +3,31 @@ const API_URL = 'http://localhost:3000/api';
 // ==========================================
 // DICCIONARIO Y ESTADO GLOBAL (Con tildes UTF-8)
 // ==========================================
-const appState = {
+const defaultState = {
     sourceCode: "SET x TO 10;\nSET y TO x;\nSET z TO y + 5;\nWRITE z;",
     consoleOut: "Esperando ejecución...",
     jjCode: "Cargando Felix.jj desde el servidor...",
     quadsUnopt: "Ejecuta el compilador para ver el código sin optimizar.",
-    quadsOpt: "Ejecuta el compilador para ver el código optimizado."
+    quadsOpt: "Ejecuta el compilador para ver el código optimizado.",
+    currentWorkspace: "intermedio"
 };
+
+// Restaurar estado de sessionStorage para sobrevivir recargas de Live Server
+function loadState() {
+    try {
+        const saved = sessionStorage.getItem('felixAppState');
+        if (saved) return { ...defaultState, ...JSON.parse(saved) };
+    } catch(e) {}
+    return { ...defaultState };
+}
+
+function saveState() {
+    try {
+        sessionStorage.setItem('felixAppState', JSON.stringify(appState));
+    } catch(e) {}
+}
+
+const appState = loadState();
 
 const explanations = {
     cse: "<b>Eliminación de subexpresiones:</b><br>Detecta operaciones idénticas en el mismo bloque y reutiliza el resultado temporal anterior en lugar de recalcularlo.",
@@ -59,7 +77,7 @@ function createEditorColumn() {
                     class="w-full flex-1 bg-transparent p-4 text-sm text-green-300 resize-none focus:outline-none whitespace-pre font-mono leading-normal overflow-auto" 
                     spellcheck="false" 
                     wrap="off"
-                    oninput="appState.sourceCode = this.value; updateLineNumbers();" 
+                    oninput="appState.sourceCode = this.value; updateLineNumbers(); saveState();" 
                     onscroll="document.getElementById('lineNumbers').scrollTop = this.scrollTop;"
                 >${appState.sourceCode}</textarea>
             </div>
@@ -128,6 +146,8 @@ function setWorkspace(preset) {
         workspace.appendChild(createViewerColumn('Cuádruples (Optimizados)', appState.quadsOpt));
     }
 
+    appState.currentWorkspace = preset;
+    saveState();
     updateActiveTab(preset);
 }
 
@@ -149,6 +169,7 @@ function loadExample(type) {
     } else {
         document.getElementById('explicacion-dict').innerHTML = explanations[type];
         appState.consoleOut = `<span class="text-blue-400">Ejemplo cargado. Haz clic en Ejecutar.</span>`;
+        appState.lastExample = type;
         
         if(type === 'cse') appState.sourceCode = `
     SET a TO 5;
@@ -239,6 +260,7 @@ function loadExample(type) {
     `;
     }
     
+    saveState();
     setWorkspace('intermedio'); // Forzar la vista del editor
 }
 
@@ -249,6 +271,7 @@ function uploadFile(event) {
         reader.onload = (e) => {
             // Guardamos el código en la memoria del estado
             appState.sourceCode = e.target.result;
+            saveState();
             
             // Buscamos el editor ACTIVO en la pantalla y le inyectamos el texto
             const currentEditor = document.getElementById('sourceCode');
@@ -306,5 +329,5 @@ async function compileCode() {
     }
 }
 
-// Inicializar la vista por defecto al cargar la página
-setWorkspace('intermedio');
+// Inicializar la vista: restaurar el workspace guardado o usar el predeterminado
+setWorkspace(appState.currentWorkspace || 'intermedio');

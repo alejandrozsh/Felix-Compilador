@@ -2,13 +2,23 @@
   COMPILADOR FELIX - CÓDIGO INTERMEDIO (Optimizados)
 ==================================================
 Archivo fuente : entrada_web.txt
-Fecha y hora   : 19/04/2026 22:33:09
+Fecha y hora   : 20/04/2026 00:21:31
 ==================================================
 
 No.    Operador     Argumento 1    Argumento 2    Resultado   
 --------------------------------------------------
-0      +            10             5              z           
-1      WRITE        z              -              -           
+0      +            10             5              e           
+1      +            e              2              g           
+2      +            g              10             i           
+3      +            i              10             k           
+4      +            k              1              m           
+5      +            m              10             o           
+6      WRITE        e              -              -           
+7      WRITE        g              -              -           
+8      WRITE        i              -              -           
+9      WRITE        k              -              -           
+10     WRITE        m              -              -           
+11     WRITE        o              -              -           
 --------------------------------------------------
-Total de instrucciones: 2
+Total de instrucciones: 12
 ==================================================
