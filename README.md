@@ -2,11 +2,11 @@
 
 Este repositorio contiene el código fuente del proyecto del Compilador Felix, incluyendo su interfaz gráfica desarrollada en web.
 
-## 🚀 Cómo ejecutar el proyecto
+## Cómo ejecutar el proyecto
 
 Para usar la aplicación web, no requieres instalaciones complejas. Simplemente abre el archivo principal o inicia el servidor de la aplicación (dependiendo de cómo manejes el backend) y la interfaz ya tendrá todos los estilos cargados.
 
-## 🎨 Modificar los estilos (Tailwind CSS)
+## Modificar los estilos (Tailwind CSS)
 
 El proyecto utiliza **Tailwind CSS** para los estilos. Para mantener el repositorio ligero, la carpeta `node_modules` no se incluye en el control de versiones. 
 
