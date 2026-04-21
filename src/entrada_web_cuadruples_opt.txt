@@ -2,11 +2,16 @@
   COMPILADOR FELIX - CÓDIGO INTERMEDIO (Optimizados)
 ==================================================
 Archivo fuente : entrada_web.txt
+<<<<<<< HEAD
 Fecha y hora   : 21/04/2026 13:21:47
+=======
+Fecha y hora   : 20/04/2026 00:21:31
+>>>>>>> 08bf66cdcd788256f3f030b5bc603c1066dbdf5a
 ==================================================
 
 No.    Operador     Argumento 1    Argumento 2    Resultado   
 --------------------------------------------------
+<<<<<<< HEAD
 0      WRITE        "Ingresa la primera calificacion:" -              -           
 1      READ         -              -              a           
 2      WRITE        "Ingresa la segunda calificacion:" -              -           
@@ -30,4 +35,20 @@ No.    Operador     Argumento 1    Argumento 2    Resultado
 20     LABEL        -              -              L2          
 --------------------------------------------------
 Total de instrucciones: 21
+=======
+0      +            10             5              e           
+1      +            e              2              g           
+2      +            g              10             i           
+3      +            i              10             k           
+4      +            k              1              m           
+5      +            m              10             o           
+6      WRITE        e              -              -           
+7      WRITE        g              -              -           
+8      WRITE        i              -              -           
+9      WRITE        k              -              -           
+10     WRITE        m              -              -           
+11     WRITE        o              -              -           
+--------------------------------------------------
+Total de instrucciones: 12
+>>>>>>> 08bf66cdcd788256f3f030b5bc603c1066dbdf5a
 ==================================================

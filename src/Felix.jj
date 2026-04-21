@@ -770,8 +770,11 @@ public class Felix {
     private List<SemanticError> semanticErrors = new ArrayList<SemanticError>();
     // [CAMBIO 3] Lista para acumular errores léxicos sin detener el análisis
     public List<String> lexicErrors = new ArrayList<String>();
+<<<<<<< HEAD
     // [CAMBIO 4] Lista para acumular errores sintácticos sin detener el análisis
     public List<String> syntaxErrors = new ArrayList<String>();
+=======
+>>>>>>> 08bf66cdcd788256f3f030b5bc603c1066dbdf5a
     private List<IntermediateInstruction> intermediateCode = new ArrayList<IntermediateInstruction>();
     private Stack<ExprNode> semanticStack = new Stack<ExprNode>();
     private int labelCounter = 0;
@@ -787,6 +790,7 @@ public class Felix {
         token_source.parserRef = this;
     }
 
+<<<<<<< HEAD
     // [CAMBIO 4] Recuperación de errores en modo pánico.
     // Usa getToken(1) (peek) para NO consumir tokens de sincronización.
     // Se detiene al encontrar:
@@ -838,6 +842,8 @@ public class Felix {
                "==================================================";
     }
 
+=======
+>>>>>>> 08bf66cdcd788256f3f030b5bc603c1066dbdf5a
     public static void main(String[] args) {
         // Archivo fuente
         java.io.InputStream inputStream = System.in;
@@ -865,6 +871,7 @@ public class Felix {
         String timestamp = now.format(fmt);
         // [CAMBIO 3] Analizar: se acumulan errores léxicos con la lista lexicErrors
         // en lugar de lanzar excepción y detener el análisis en el primer token inválido.
+<<<<<<< HEAD
         // [CAMBIO 4] Los errores sintácticos ahora se acumulan en syntaxErrors
         // gracias a la recuperación en Statement(). El catch aquí es solo seguridad.
         Felix parser = new Felix(inputStream);
@@ -883,6 +890,34 @@ public class Felix {
             || !parser.semanticErrors.isEmpty()
             || !parser.lexicErrors.isEmpty();
         // ── Terminal: mostrar todos los errores acumulados ─────────────────
+=======
+        Felix parser = new Felix(inputStream);
+        boolean syntaxError = false;
+        String syntaxErrorDetail = "";
+        try {
+            parser.Start();
+        } catch (ParseException e) {
+            // [CAMBIO 3] Error sintáctico: se registra el detalle pero NO se aborta;
+            // los errores semánticos ya acumulados siguen siendo válidos.
+            syntaxError = true;
+            syntaxErrorDetail =
+                "Línea " + e.currentToken.next.beginLine +
+                ", Columna " + e.currentToken.next.beginColumn + ": " +
+                traducirExpectedTokens(e);
+        } catch (TokenMgrError e) {
+            // [CAMBIO 3] Error léxico fatal (TokenMgrError ya no debería llegar aquí
+            // porque el token ERROR del lexer lo captura, pero se conserva por seguridad).
+            syntaxError = true;
+            syntaxErrorDetail = "Carácter no reconocido (error léxico).";
+        }
+
+        // [CAMBIO 2] Determinar si hay CUALQUIER tipo de error antes de escribir el archivo
+        boolean hayErrores = syntaxError
+            || !parser.semanticErrors.isEmpty()
+            || !parser.lexicErrors.isEmpty();
+        // ── Terminal: mostrar todos los errores acumulados ─────────────────
+        // [CAMBIO 2] Mensajes con tildes correctas
+>>>>>>> 08bf66cdcd788256f3f030b5bc603c1066dbdf5a
         if (!parser.lexicErrors.isEmpty()) {
             System.out.println("\n==================================================");
             System.out.println("ERRORES LÉXICOS DETECTADOS (" + parser.lexicErrors.size() + "):");
@@ -892,6 +927,7 @@ public class Felix {
             }
         }
 
+<<<<<<< HEAD
         if (!parser.syntaxErrors.isEmpty()) {
             System.out.println("\n==================================================");
             System.out.println("ERRORES SINTÁCTICOS DETECTADOS (" + parser.syntaxErrors.size() + "):");
@@ -899,6 +935,13 @@ public class Felix {
             for (String se : parser.syntaxErrors) {
                 System.out.println(se);
             }
+=======
+        if (syntaxError) {
+            System.out.println("\n==================================================");
+            System.out.println("ERROR SINTÁCTICO");
+            System.out.println("\nDetalle: " + syntaxErrorDetail);
+            System.out.println("==================================================");
+>>>>>>> 08bf66cdcd788256f3f030b5bc603c1066dbdf5a
         }
 
         if (!parser.semanticErrors.isEmpty()) {
@@ -910,7 +953,11 @@ public class Felix {
         // Estado final en terminal
         if (hayErrores) {
             int total = parser.lexicErrors.size()
+<<<<<<< HEAD
                       + parser.syntaxErrors.size()
+=======
+                      + (syntaxError ? 1 : 0)
+>>>>>>> 08bf66cdcd788256f3f030b5bc603c1066dbdf5a
                       + parser.semanticErrors.size();
             System.out.println("\n==================================================");
             System.out.println("ESTADO FINAL: Compilación con " + total + " error(es). No se generó código intermedio.");
@@ -1110,6 +1157,7 @@ void Start() : {} {
     ( Statement() )* <EOF>
 }
 
+<<<<<<< HEAD
 // [CAMBIO 4] Statement() con recuperación de errores: si una sentencia falla,
 // se registra el error y se avanza hasta el siguiente punto de sincronización
 // para continuar analizando el resto del código.
@@ -1129,6 +1177,11 @@ void Statement() : {} {
         }
         recoverFromError();
     }
+=======
+void Statement() : {} {
+    ( Asignacion() | EscribirTexto() | LeerVariable() | Condicional()
+    | DeclararMatriz() | WhileStatement() | ForStatement() | SwitchStatement() )
+>>>>>>> 08bf66cdcd788256f3f030b5bc603c1066dbdf5a
 }
 
 void Asignacion() : { Token id;

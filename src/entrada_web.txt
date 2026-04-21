@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 WRITE "Ingresa la primera calificacion:";
 READ a;
 
@@ -17,3 +18,34 @@ IF promedio >= 70 THEN
 ELSE
     WRITE "Reprobado";
 ENDIF
+=======
+    SET a TO 10;
+    SET b TO a;
+    SET c TO b;
+    SET d TO c;
+
+    SET e TO d + 5;
+    SET f TO e;
+
+    SET g TO f + 2;
+    SET h TO g;
+
+    SET i TO h + a;
+    SET j TO i;
+
+    SET k TO j + b;
+    SET l TO k;
+
+    SET m TO l + 1;
+    SET n TO m;
+
+    SET o TO n + c;
+
+    WRITE e;
+    WRITE g;
+    WRITE i;
+    WRITE k;
+    WRITE m;
+    WRITE o;
+    
+>>>>>>> 08bf66cdcd788256f3f030b5bc603c1066dbdf5a
