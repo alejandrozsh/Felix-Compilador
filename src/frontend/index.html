@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Felix Compilador</title>
+    <link rel="stylesheet" href="dist/output.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="h-screen flex flex-col p-4 bg-editor text-foreground font-mono">
+
+    <header class="flex justify-center mb-4 space-x-4 border-b border-divider pb-2 relative">
+        <h1 class="text-blue-400 font-bold absolute left-4 text-xl">FELIX COMPILADOR</h1>
+        
+        <button id="tab-jj" onclick="setWorkspace('jj')" class="px-4 py-1 hover:bg-panel-hover rounded text-gray-300 transition-colors">Código .jj</button>
+        <button id="tab-intermedio" onclick="setWorkspace('intermedio')" class="px-4 py-1 hover:bg-panel-hover rounded text-gray-300 transition-colors">Código Intermedio</button>
+        <button id="tab-optimizado" onclick="setWorkspace('optimizado')" class="px-4 py-1 hover:bg-panel-hover rounded text-gray-300 transition-colors">Código Optimizado</button>
+        
+        <button onclick="addCustomPanel()" class="px-4 py-1 hover:bg-panel-hover rounded text-yellow-400 transition-colors">+ Agregar panel</button>
+    </header>
+
+    <div class="flex flex-1 gap-4 overflow-hidden">
+        
+        <aside class="w-1/5 panel rounded-lg p-4 flex flex-col gap-4 overflow-y-auto min-w-[250px]">
+            <h2 class="text-sm text-gray-400 text-center mb-2">PROCESOS DE OPTIMIZACIÓN</h2>
+            
+            <button onclick="loadExample('cse')" class="opt-btn">
+                Local: Eliminación de subexpresiones
+            </button>
+            <button onclick="loadExample('copy')" class="opt-btn">
+                Local: Propagación de copias
+            </button>
+            <button onclick="loadExample('loop')" class="opt-btn">
+                Ciclos: Reducción de frecuencia
+            </button>
+            <button onclick="loadExample('libre')" class="opt-btn" style="border-color: #3b82f6; margin-top: 10px;">
+                📝 Modo Libre (Bloc de notas)
+            </button>
+            
+            <div class="mt-auto pt-4 border-t border-divider text-xs text-gray-400" id="explicacion-dict">
+                Selecciona una optimización para ver su explicación.
+            </div>
+
+            <div class="mt-4 pt-4 border-t border-divider">
+                <button onclick="compileCode()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded shadow-lg transition-colors">
+                    ▶ EJECUTAR FELIX
+                </button>
+            </div>
+        </aside>
+
+        <main id="workspace" class="flex-1 flex gap-4 overflow-x-auto">
+            </main>
+
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

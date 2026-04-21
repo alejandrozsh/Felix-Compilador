@@ -1,0 +1,33 @@
+==================================================
+  COMPILADOR FELIX - CÓDIGO INTERMEDIO (Optimizados)
+==================================================
+Archivo fuente : entrada_web.txt
+Fecha y hora   : 21/04/2026 13:21:47
+==================================================
+
+No.    Operador     Argumento 1    Argumento 2    Resultado   
+--------------------------------------------------
+0      WRITE        "Ingresa la primera calificacion:" -              -           
+1      READ         -              -              a           
+2      WRITE        "Ingresa la segunda calificacion:" -              -           
+3      READ         -              -              b           
+4      WRITE        "Ingresa la tercera calificacion:" -              -           
+5      READ         -              -              c           
+6      +            a              b              t1          
+7      +            t1             c              t2          
+8      /            t2             3              promedio    
+9      WRITE        "El promedio es:" -              -           
+10     WRITE        promedio       -              -           
+11     >=           promedio       70             t1          
+12     IFT          t1             -              L1          
+13     GOTO         -              -              L2          
+14     LABEL        -              -              L1          
+15     WRITE        "Aprobado"     -              -           
+16     GOTO         -              -              L3          
+17     LABEL        -              -              L2          
+18     WRITE        "Reprobado"    -              -           
+19     LABEL        -              -              L3          
+20     LABEL        -              -              L2          
+--------------------------------------------------
+Total de instrucciones: 21
+==================================================

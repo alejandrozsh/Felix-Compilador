@@ -1,0 +1,78 @@
+/* Variables de tema oscuro */
+:root {
+    --bg-main: #1e1e1e;
+    --bg-panel: #252526;
+    --bg-panel-header: #2d2d2d;
+    --bg-hover: #333333;
+    --border-color: #333333;
+    --text-main: #d4d4d4;
+    --text-muted: #9ca3af;
+    --accent-blue: #3b82f6;
+    --accent-red: rgba(239, 68, 68, 0.5);
+}
+
+body.bg-editor {
+    background-color: var(--bg-main);
+}
+
+.text-foreground {
+    color: var(--text-main);
+}
+
+.panel {
+    background-color: var(--bg-panel);
+    border: 1px solid var(--border-color);
+}
+
+.header-bar {
+    background-color: var(--bg-panel-header);
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.border-divider {
+    border-color: var(--border-color);
+}
+
+.bg-panel-hover {
+    background-color: var(--bg-hover);
+}
+
+.tab-active {
+    border-bottom: 2px solid var(--accent-blue);
+}
+
+.opt-btn {
+    border: 1px solid var(--accent-red);
+    padding: 0.5rem;
+    font-size: 0.875rem;
+    text-align: center;
+    border-radius: 0.25rem;
+    transition: background-color 0.2s, border-color 0.2s;
+    color: var(--text-main);
+}
+
+.opt-btn:hover {
+    border-color: #ef4444; /* red-500 */
+    background-color: rgba(239, 68, 68, 0.1);
+}
+
+/* Personalización del Scrollbar para que luzca bien en macOS y navegadores webkit */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-panel);
+}
+
+::-webkit-scrollbar-thumb {
+    background: #4a4a4a;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
