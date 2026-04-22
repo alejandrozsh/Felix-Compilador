@@ -4,7 +4,7 @@ const API_URL = 'http://localhost:3000/api';
 // DICCIONARIO Y ESTADO GLOBAL (Con tildes UTF-8)
 // ==========================================
 const defaultState = {
-    sourceCode: "SET x TO 10;\nSET y TO x;\nSET z TO y + 5;\nWRITE z;",
+    sourceCode: "",
     consoleOut: "Esperando ejecución...",
     jjCode: "Cargando Felix.jj desde el servidor...",
     quadsUnopt: "Ejecuta el compilador para ver el código sin optimizar.",
@@ -172,91 +172,40 @@ function loadExample(type) {
         appState.lastExample = type;
         
         if(type === 'cse') appState.sourceCode = `
-    SET a TO 5;
-    SET b TO 10;
-    SET c TO 2;
+    WRITE "Calculando coordenadas...";
+    SET x TO 10;
+    SET y TO 20;
+    SET z TO 5;
 
-    SET t1 TO a + b;
-    SET t2 TO a + b;
-    SET t3 TO a + b;
+    WRITE "Punto A:";
+    SET puntoA TO (x * y) + z;
+    WRITE puntoA;
 
-    SET x TO t1 * c;
-    SET y TO t2 * c;
-    SET z TO t3 * c;
-
-    SET m TO a + b;
-    SET n TO a + b;
-
-    SET r TO m + n;
-
-    SET p TO a * b;
-    SET q TO a * b;
-
-    SET s TO p + q;
-
-    WRITE x;
-    WRITE y;
-    WRITE z;
-    WRITE r;
-    WRITE s;
+    WRITE "Punto B (con offset):";
+    SET puntoB TO (x * y) + 15;
+    WRITE puntoB;
     `;
         if(type === 'copy') appState.sourceCode = `
-    SET a TO 10;
-    SET b TO a;
-    SET c TO b;
-    SET d TO c;
+    SET tarifaBase TO 500,0;
+    SET tarifaCliente TO tarifaBase;
+    SET cobroFinal TO tarifaCliente;
+    SET impuesto TO cobroFinal * 0.16;
 
-    SET e TO d + 5;
-    SET f TO e;
-
-    SET g TO f + 2;
-    SET h TO g;
-
-    SET i TO h + a;
-    SET j TO i;
-
-    SET k TO j + b;
-    SET l TO k;
-
-    SET m TO l + 1;
-    SET n TO m;
-
-    SET o TO n + c;
-
-    WRITE e;
-    WRITE g;
-    WRITE i;
-    WRITE k;
-    WRITE m;
-    WRITE o;
+    WRITE "El impuesto a pagar es:";
+    WRITE impuesto;
     `;
         if(type === 'loop') appState.sourceCode = `
-    SET a TO 5;
-    SET b TO 10;
-    SET c TO 2;
-    SET i TO 0;
+    SET factor TO 3;
+    SET iteracion TO 0;
 
-    WHILE (i < 10) DO
-        SET t1 TO a + b;
-        SET t2 TO a + b;
-        SET t3 TO t1 * c;
-
-        SET x TO t2 + t3;
-        SET y TO a + b;
-
-        SET z TO y * c;
-
-        SET r TO a * b;
-
-        SET s TO r + c;
-
-        SET i TO i + 1;
+    WHILE (iteracion < 50) DO
+    WRITE "Procesando...";
+    SET constanteMagica TO (factor * 100) / 2;
+    SET resultado TO iteracion + constanteMagica;
+     WRITE resultado;
+    
+    SET iteracion TO iteracion + 1;
     ENDWHILE
-
-    WRITE x;
-    WRITE y;
-    WRITE z;
-    WRITE s;
     `;
     }
     

@@ -2,23 +2,23 @@
   COMPILADOR FELIX - CÓDIGO INTERMEDIO (Optimizados)
 ==================================================
 Archivo fuente : entrada_web.txt
-Fecha y hora   : 20/04/2026 00:21:31
+Fecha y hora   : 22/04/2026 02:04:02
 ==================================================
 
 No.    Operador     Argumento 1    Argumento 2    Resultado   
 --------------------------------------------------
-0      +            10             5              e           
-1      +            e              2              g           
-2      +            g              10             i           
-3      +            i              10             k           
-4      +            k              1              m           
-5      +            m              10             o           
-6      WRITE        e              -              -           
-7      WRITE        g              -              -           
-8      WRITE        i              -              -           
-9      WRITE        k              -              -           
-10     WRITE        m              -              -           
-11     WRITE        o              -              -           
+0      LABEL        -              -              L1          
+1      <            0              50             t1          
+2      IFT          t1             -              L3          
+3      GOTO         -              -              L2          
+4      LABEL        -              -              L3          
+5      WRITE        "Procesando..." -              -           
+6      *            3              100            t1          
+7      /            t1             2              constanteMagica
+8      +            0              constanteMagica resultado   
+9      WRITE        resultado      -              -           
+10     GOTO         -              -              L1          
+11     LABEL        -              -              L2          
 --------------------------------------------------
 Total de instrucciones: 12
 ==================================================

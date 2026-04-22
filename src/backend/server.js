@@ -29,6 +29,12 @@ app.post('/api/compile', (req, res) => {
     const tempFile = path.join(COMPILER_DIR, 'entrada_web.txt');
     fs.writeFileSync(tempFile, code);
 
+    // Limpiar archivos de cuádruples anteriores para no mostrar resultados viejos
+    const unoptFilePre = path.join(COMPILER_DIR, 'entrada_web_cuadruples_unopt.txt');
+    const optFilePre = path.join(COMPILER_DIR, 'entrada_web_cuadruples_opt.txt');
+    if (fs.existsSync(unoptFilePre)) fs.unlinkSync(unoptFilePre);
+    if (fs.existsSync(optFilePre)) fs.unlinkSync(optFilePre);
+
     // Ejecutamos tu compilador compilado
     exec('java Felix entrada_web.txt', { cwd: COMPILER_DIR }, (error, stdout, stderr) => {
         

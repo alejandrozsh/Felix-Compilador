@@ -1,29 +1,12 @@
-    SET a TO 10;
-    SET b TO a;
-    SET c TO b;
-    SET d TO c;
+    SET factor TO 3;
+    SET iteracion TO 0;
 
-    SET e TO d + 5;
-    SET f TO e;
-
-    SET g TO f + 2;
-    SET h TO g;
-
-    SET i TO h + a;
-    SET j TO i;
-
-    SET k TO j + b;
-    SET l TO k;
-
-    SET m TO l + 1;
-    SET n TO m;
-
-    SET o TO n + c;
-
-    WRITE e;
-    WRITE g;
-    WRITE i;
-    WRITE k;
-    WRITE m;
-    WRITE o;
+    WHILE (iteracion < 50) DO
+    WRITE "Procesando...";
+    SET constanteMagica TO (factor * 100) / 2;
+    SET resultado TO iteracion + constanteMagica;
+     WRITE resultado;
+    
+    SET iteracion TO iteracion + 1;
+    ENDWHILE
     

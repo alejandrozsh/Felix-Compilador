@@ -1,0 +1,18 @@
+WRITE "Ingresa la primera calificacion:"
+READ a
+
+WRITE "Ingresa la segunda calificacion:"
+READ b
+
+WRITE "Ingresa la tercera calificacion:"
+READ c
+
+SET promedio = (a + b + c) / 3
+
+WRITE "El promedio es:"
+WRITE promedio
+
+IF promedio >= 70 THEN
+    WRITE "Aprobado"
+ELSE
+    WRITE "Reprobado"

@@ -2,38 +2,29 @@
   COMPILADOR FELIX - CÓDIGO INTERMEDIO (Sin Optimizar)
 ==================================================
 Archivo fuente : entrada_web.txt
-Fecha y hora   : 20/04/2026 00:21:31
+Fecha y hora   : 22/04/2026 02:04:02
 ==================================================
 
 No.    Operador     Argumento 1    Argumento 2    Resultado   
 --------------------------------------------------
-0      =            10             -              a           
-1      =            a              -              b           
-2      =            b              -              c           
-3      =            c              -              d           
-4      +            d              5              t1          
-5      =            t1             -              e           
-6      =            e              -              f           
-7      +            f              2              t1          
-8      =            t1             -              g           
-9      =            g              -              h           
-10     +            h              a              t1          
-11     =            t1             -              i           
-12     =            i              -              j           
-13     +            j              b              t1          
-14     =            t1             -              k           
-15     =            k              -              l           
-16     +            l              1              t1          
-17     =            t1             -              m           
-18     =            m              -              n           
-19     +            n              c              t1          
-20     =            t1             -              o           
-21     WRITE        e              -              -           
-22     WRITE        g              -              -           
-23     WRITE        i              -              -           
-24     WRITE        k              -              -           
-25     WRITE        m              -              -           
-26     WRITE        o              -              -           
+0      =            3              -              factor      
+1      =            0              -              iteracion   
+2      LABEL        -              -              L1          
+3      <            iteracion      50             t1          
+4      IFT          t1             -              L3          
+5      GOTO         -              -              L2          
+6      LABEL        -              -              L3          
+7      WRITE        "Procesando..." -              -           
+8      *            factor         100            t1          
+9      /            t1             2              t2          
+10     =            t2             -              constanteMagica
+11     +            iteracion      constanteMagica t1          
+12     =            t1             -              resultado   
+13     WRITE        resultado      -              -           
+14     +            iteracion      1              t1          
+15     =            t1             -              iteracion   
+16     GOTO         -              -              L1          
+17     LABEL        -              -              L2          
 --------------------------------------------------
-Total de instrucciones: 27
+Total de instrucciones: 18
 ==================================================

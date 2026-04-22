@@ -19,7 +19,8 @@ class VariableNode extends ExprNode {
 class BinaryOpNode extends ExprNode {
     ExprNode left, right; String operator;
     public BinaryOpNode(String operator, ExprNode left, ExprNode right) {
-        this.operator = operator; this.left = left; this.right = right;
+        this.operator = operator;
+        this.left = left; this.right = right;
     }
 }
 
@@ -33,7 +34,8 @@ class UnaryOpNode extends ExprNode {
 class MatrixAccessNode extends ExprNode {
     String name; ExprNode row, col;
     public MatrixAccessNode(String name, ExprNode row, ExprNode col) {
-        this.name = name; this.row = row; this.col = col; this.type = "PENDING_LOOKUP";
+        this.name = name;
+        this.row = row; this.col = col; this.type = "PENDING_LOOKUP";
     }
 }
 
@@ -43,7 +45,8 @@ class MatrixAccessNode extends ExprNode {
 class IntermediateInstruction {
     String operator, arg1, arg2, result;
     public IntermediateInstruction(String op, String a1, String a2, String res) {
-        this.operator = op; this.arg1 = a1; this.arg2 = a2; this.result = res;
+        this.operator = op;
+        this.arg1 = a1; this.arg2 = a2; this.result = res;
     }
 }
 
@@ -57,10 +60,6 @@ class BasicBlock {
 }
 
 class OptimizerUtils {
-
-    // Construye bloques básicos.
-    // Cada LABEL inicia un bloque nuevo.
-    // GOTO e IFT cierran el bloque actual.
     public static List<BasicBlock> buildBlocks(List<IntermediateInstruction> code) {
         List<BasicBlock> blocks = new ArrayList<BasicBlock>();
         BasicBlock current = new BasicBlock(0);
@@ -87,9 +86,6 @@ class OptimizerUtils {
         return code;
     }
 
-    // Resuelve la cadena completa de un mapa de reemplazos para un operando.
-    // Ej: mapa {b:a, c:b} aplicado a "c" devuelve "a".
-    // El Set<visited> previene ciclos infinitos.
     public static String applyMap(String operand, Map<String, String> map) {
         if (operand == null) return null;
         String resolved = operand;
@@ -101,13 +97,10 @@ class OptimizerUtils {
         return resolved;
     }
 
-    // ¿Es la cadena un temporal generado por el compilador?
-    // (t1, t2, t_for_x, ...)
     public static boolean isTemp(String s) {
         return s != null && (s.matches("t\\d+") || s.startsWith("t_"));
     }
 
-    // ¿Es la cadena un literal numérico o de cadena?
     public static boolean isLiteral(String s) {
         if (s == null) return false;
         return s.matches("-?\\d+(\\.\\d+)?") || s.startsWith("\"");
@@ -120,7 +113,6 @@ interface Optimizer {
 
 // ============================================================
 // 0. PEEPHOLE OPTIMIZER (Colapso de Temporales)
-// Colapsa "OP a b -> t1" seguido de "= t1 -> x" en "OP a b -> x"
 // ============================================================
 class PeepholeOptimizer implements Optimizer {
     public List<IntermediateInstruction> optimize(List<IntermediateInstruction> code) {
@@ -129,15 +121,12 @@ class PeepholeOptimizer implements Optimizer {
             IntermediateInstruction curr = code.get(i);
             if (i < code.size() - 1) {
                 IntermediateInstruction next = code.get(i + 1);
-                // Si la actual genera un temporal y la siguiente es una asignación directa a variable
                 if (curr.result != null && OptimizerUtils.isTemp(curr.result) &&
                     next.operator.equals("=") && next.arg1 != null &&
                     next.arg1.equals(curr.result) && next.arg2 == null) {
-
-                    // Fusionar: El resultado de la op original ahora es la variable final
                     curr.result = next.result;
                     result.add(curr);
-                    i++; // Saltamos la instrucción de asignación redundante
+                    i++;
                     continue;
                 }
             }
@@ -149,18 +138,6 @@ class PeepholeOptimizer implements Optimizer {
 
 // ============================================================
 // 1. ELIMINACIÓN DE SUBEXPRESIONES COMUNES (CSE)
-//
-// Opera por bloques básicos para respetar el flujo de control.
-// Por cada bloque:
-//   - Mantiene una tabla "expresión → primer temporal que la calculó".
-//   - Si detecta una expresión repetida, NO agrega la instrucción,
-//     y registra que el nuevo temporal es alias del primero.
-//   - Aplica esos alias a los argumentos de instrucciones siguientes.
-//   - Invalida la tabla si una variable base es redefinida.
-//
-// ANTES: 
-//  t1=a+b | t2=a+b | t3=t2*c | y=t3
-// DESPUÉS: t1=a+b | t3=t1*c | y=t3        (t2 eliminada)
 // ============================================================
 class CommonSubexpressionElimination implements Optimizer {
     public List<IntermediateInstruction> optimize(List<IntermediateInstruction> code) {
@@ -170,13 +147,11 @@ class CommonSubexpressionElimination implements Optimizer {
             Map<String, String> replacements = new HashMap<String, String>();
             List<IntermediateInstruction> clean = new ArrayList<IntermediateInstruction>();
             for (IntermediateInstruction ins : block.instructions) {
-                // Aplicar alias acumulados a los operandos (nunca al result)
                 ins.arg1 = OptimizerUtils.applyMap(ins.arg1, replacements);
                 ins.arg2 = OptimizerUtils.applyMap(ins.arg2, replacements);
 
                 boolean isRedundant = false;
 
-                // ¿Operación binaria candidate a CSE?
                 if (ins.arg1 != null && ins.arg2 != null
                         && !ins.operator.equals("=")
                         && !ins.operator.startsWith("IF")
@@ -189,7 +164,6 @@ class CommonSubexpressionElimination implements Optimizer {
 
                     String key = ins.operator + "|" + ins.arg1 + "|" + ins.arg2;
                     if (exprTable.containsKey(key)) {
-                        // Redundante: redirigir usos futuros del result al primer temporal
                         replacements.put(ins.result, exprTable.get(key));
                         isRedundant = true;
                     } else {
@@ -197,13 +171,11 @@ class CommonSubexpressionElimination implements Optimizer {
                     }
                 }
 
-                // Invalidar caché si result es una variable base de alguna expresión registrada
                 if (ins.result != null && !isRedundant) {
                     List<String> toRemove = new ArrayList<String>();
                     for (String key : exprTable.keySet()) {
                         String[] parts = key.split("\\|");
-                        if (parts.length == 3
-                                && (parts[1].equals(ins.result) || parts[2].equals(ins.result))) {
+                        if (parts.length == 3 && (parts[1].equals(ins.result) || parts[2].equals(ins.result))) {
                             toRemove.add(key);
                         }
                     }
@@ -220,63 +192,21 @@ class CommonSubexpressionElimination implements Optimizer {
 
 // ============================================================
 // 2. PROPAGACIÓN DE COPIAS (global, dos pasadas)
-//
-// PROBLEMA ANTERIOR:
-//   - Operaba por bloques → el mapa se reiniciaba en cada bloque.
-//   - Bloqueaba copias de temporales (t1) para evitar retroceder,
-//     pero eso impedía que "e = t1" propagara "t1" a usos de "e".
-//   - El regex "t\d+" estaba mal escapado en JavaCC y nunca matcheaba.
-//
-// SOLUCIÓN:
-//   Pasada 1 – construir copyMap GLOBAL:
-//     Para cada "x = y" (sin arg2):
-//       Resolver y con el mapa actual → y_resuelto
-//       Registrar copyMap[x] = y_resuelto
-//     Esto aplica tanto cuando y es variable de usuario COMO temporal.
-//     La dirección siempre es: "usar y_resuelto en lugar de x".
-//
-//   Pasada 2 – aplicar copyMap a arg1 y arg2 de toda instrucción.
-//     result nunca se reemplaza (es el destino de la instrucción).
-//
-//   La limpieza de copias muertas la hace DCE en la siguiente fase.
-//
-// ANTES:  a=10 | b=a | c=b | d=c | WRITE d
-// DESPUÉS (esta fase): a=10 | b=10 | c=10 | d=10 | WRITE 10
-// DESPUÉS (+ DCE):     a=10 | WRITE 10
-//
-// ANTES:  t1=a+b | e=t1 | f=t1 | WRITE e | WRITE f
-// DESPUÉS (esta fase): t1=a+b | e=t1 | f=t1 | WRITE t1 | WRITE t1
-// DESPUÉS (+ DCE):     t1=a+b | WRITE t1 | WRITE t1
 // ============================================================
 class CopyPropagation implements Optimizer {
     public List<IntermediateInstruction> optimize(List<IntermediateInstruction> code) {
-
-       // ── Pasada 1: construir mapa global de copias ──────────────────────
         Map<String, String> copyMap = new LinkedHashMap<String, String>();
         for (IntermediateInstruction ins : code) {
-            if (ins.operator.equals("=")
-                    && ins.arg2 == null
-                    && ins.arg1 != null
-                    && ins.result != null) {
-
-                // Resolver la fuente siguiendo la cadena completa ya registrada
+            if (ins.operator.equals("=") && ins.arg2 == null && ins.arg1 != null && ins.result != null) {
                 String resolvedSrc = OptimizerUtils.applyMap(ins.arg1, copyMap);
-
-                // [NUEVO] Preferir nombres de variables de usuario sobre temporales
                 if (OptimizerUtils.isTemp(resolvedSrc) && !OptimizerUtils.isTemp(ins.result)) {
-                    // Si el origen es un temporal (t1) y el destino es una variable real (x),
-                    // obligamos al temporal a adoptar permanentemente el nombre real.
                     copyMap.put(resolvedSrc, ins.result);
                 } else {
-                    // Comportamiento por defecto (ej. x = y, o t2 = t1)
                     copyMap.put(ins.result, resolvedSrc);
                 }
             }
         }
 
-        // ── Pasada 2: aplicar mapa a toda la lista (lista nueva) ──────────
-        // arg1 y arg2 se reemplazan con la fuente resuelta.
-        // result NUNCA se reemplaza: sigue siendo el destino original.
         List<IntermediateInstruction> result = new ArrayList<IntermediateInstruction>();
         for (IntermediateInstruction ins : code) {
             result.add(new IntermediateInstruction(
@@ -286,33 +216,12 @@ class CopyPropagation implements Optimizer {
                 ins.result
             ));
         }
-
         return result;
     }
 }
 
 // ============================================================
 // 3. REDUCCIÓN DE FRECUENCIA EN CICLOS (Loop Invariant Code Motion)
-//
-// PROBLEMA ANTERIOR:
-//   - Detectaba como "ciclo" cualquier LABEL seguido de cualquier GOTO,
-//     capturando etiquetas de IF que no son bucles.
-//   - Colocaba los invariantes dentro del cuerpo en lugar de antes del LABEL.
-//   - No iteraba hasta punto fijo (una pasada podía dejar dependencias).
-//
-// SOLUCIÓN:
-//   Un back-edge real es un GOTO L donde L aparece en una posición
-//   ANTERIOR en la lista (índice menor). Eso distingue bucles de IFs.
-//
-//   Para cada back-edge encontrado:
-//     1. Calcular el conjunto "modified" = variables escritas en el cuerpo.
-//     2. Un invariante es una instrucción cuyo result es temporal (tN o t_*)
-//        y cuyos arg1/arg2 NO están en modified (o son literales).
-//     3. Extraer invariantes del cuerpo e insertarlos ANTES del LABEL.
-//     4. Repetir hasta que no haya más cambios (punto fijo).
-//
-// ANTES:  LABEL L1 | IFT t1 L3 | GOTO L2 | LABEL L3 | t2=a+b | GOTO L1
-// DESPUÉS: t2=a+b | LABEL L1 | IFT t1 L3 | GOTO L2 | LABEL L3 | GOTO L1
 // ============================================================
 class LoopInvariantCodeMotion implements Optimizer {
     public List<IntermediateInstruction> optimize(List<IntermediateInstruction> code) {
@@ -321,7 +230,6 @@ class LoopInvariantCodeMotion implements Optimizer {
 
         while (changed) {
             changed = false;
-            // Mapa label → índice actual en la lista
             Map<String, Integer> labelPos = new LinkedHashMap<String, Integer>();
             for (int i = 0; i < result.size(); i++) {
                 IntermediateInstruction ins = result.get(i);
@@ -330,55 +238,37 @@ class LoopInvariantCodeMotion implements Optimizer {
                 }
             }
 
-            // Buscar back-edges: GOTO L donde pos(L) < pos(GOTO)
             for (int gotoIdx = 0; gotoIdx < result.size(); gotoIdx++) {
                 IntermediateInstruction gotoIns = result.get(gotoIdx);
                 if (!gotoIns.operator.equals("GOTO")) continue;
                 if (!labelPos.containsKey(gotoIns.result)) continue;
 
                 int labelIdx = labelPos.get(gotoIns.result);
-                if (labelIdx >= gotoIdx) continue; // No es back-edge
+                if (labelIdx >= gotoIdx) continue;
 
-                // Cuerpo del ciclo: [labelIdx .. gotoIdx] inclusive
-                // Variables escritas en el cuerpo
                 Set<String> modified = new HashSet<String>();
                 for (int i = labelIdx; i <= gotoIdx; i++) {
                     IntermediateInstruction ins = result.get(i);
-                    if (ins.result != null
-                            && !ins.operator.equals("LABEL")
-                            && !ins.operator.equals("IFT")
-                            && !ins.operator.equals("GOTO")) {
-
+                    if (ins.result != null && !ins.operator.equals("LABEL") && !ins.operator.equals("IFT") && !ins.operator.equals("GOTO")) {
                         modified.add(ins.result);
                     }
                 }
 
-                // Identificar invariantes dentro del cuerpo (labelIdx+1 .. gotoIdx-1)
                 List<IntermediateInstruction> toHoist  = new ArrayList<IntermediateInstruction>();
                 List<Integer>                hoistIdxs = new ArrayList<Integer>();
                 for (int i = labelIdx + 1; i < gotoIdx; i++) {
                     IntermediateInstruction ins = result.get(i);
-                    // Solo instrucciones de cómputo
                     if (ins.operator.equals("LABEL") || ins.operator.equals("GOTO")
                             || ins.operator.equals("IFT")  || ins.operator.equals("WRITE")
                             || ins.operator.equals("READ")  || ins.operator.equals("NEWMAT")) continue;
-
                     if (ins.result == null) continue;
 
-                    // Los argumentos no deben ser variables modificadas en el ciclo
-                    boolean arg1Safe = ins.arg1 == null
-                            || OptimizerUtils.isLiteral(ins.arg1)
-                            || !modified.contains(ins.arg1);
-                    boolean arg2Safe = ins.arg2 == null
-                            || OptimizerUtils.isLiteral(ins.arg2)
-                            || !modified.contains(ins.arg2);
+                    boolean arg1Safe = ins.arg1 == null || OptimizerUtils.isLiteral(ins.arg1) || !modified.contains(ins.arg1);
+                    boolean arg2Safe = ins.arg2 == null || OptimizerUtils.isLiteral(ins.arg2) || !modified.contains(ins.arg2);
 
-                    // El propio result no debe redefinirse más adelante en el ciclo
-                    // (comprobamos si aparece en más de una escritura)
                     int defCount = 0;
                     for (int j = labelIdx; j <= gotoIdx; j++) {
-                        if (result.get(j).result != null
-                                && result.get(j).result.equals(ins.result)) defCount++;
+                        if (result.get(j).result != null && result.get(j).result.equals(ins.result)) defCount++;
                     }
 
                     if (arg1Safe && arg2Safe && defCount == 1) {
@@ -389,22 +279,18 @@ class LoopInvariantCodeMotion implements Optimizer {
                 }
 
                 if (!toHoist.isEmpty()) {
-                    // Eliminar del cuerpo de atrás hacia adelante
                     for (int i = hoistIdxs.size() - 1; i >= 0; i--) {
                         result.remove((int) hoistIdxs.get(i));
                     }
-                    // Recalcular posición del LABEL (puede haber cambiado tras eliminación)
                     int newLabelIdx = -1;
                     for (int i = 0; i < result.size(); i++) {
-                        if (result.get(i).operator.equals("LABEL")
-                                && result.get(i).result != null
-                                && result.get(i).result.equals(gotoIns.result)) {
+                        if (result.get(i).operator.equals("LABEL") && result.get(i).result != null && result.get(i).result.equals(gotoIns.result)) {
                             newLabelIdx = i;
                             break;
                         }
                     }
                     if (newLabelIdx >= 0) result.addAll(newLabelIdx, toHoist);
-                    break; // reiniciar con mapa de posiciones actualizado
+                    break;
                 }
             }
         }
@@ -414,27 +300,6 @@ class LoopInvariantCodeMotion implements Optimizer {
 
 // ============================================================
 // 4. ELIMINACIÓN DE CÓDIGO MUERTO (DCE)
-//
-// PROBLEMA ANTERIOR:
-//   - El regex "t\d+" estaba mal escapado → en JavaCC el string Java
-//     dentro de acciones necesita doble escape: "t\\d+"
-//     Sin el doble escape nunca matcheaba y NO se eliminaba nada.
-//   - No eliminaba copias puras de variables de usuario sin usos.
-//
-// SOLUCIÓN:
-//   Bucle hasta punto fijo:
-//     1. Recopilar todas las variables USADAS:
-//        - Aparecen en arg1 o arg2 de cualquier instrucción.
-//        - El destino de IFT (etiqueta) se considera "usado".
-//        - Los WRITE consumen su arg1.
-//     2. Una instrucción es "muerta" si su result no está en "used" Y:
-//        a) Es un temporal (t\\d+ o t_*), O
-//        b) Es una copia pura (op="=", arg2=null) de variable de usuario.
-//     3. Eliminarla y repetir: eliminar t2 puede hacer que t1 (que
-//        solo alimentaba a t2) también quede muerto.
-//
-// ANTES:  t1=a+b | e=t1 | f=t1 | WRITE x   (e y f no se usan)
-// DESPUÉS: t1=a+b | WRITE x
 // ============================================================
 class DeadCodeElimination implements Optimizer {
     public List<IntermediateInstruction> optimize(List<IntermediateInstruction> code) {
@@ -443,12 +308,10 @@ class DeadCodeElimination implements Optimizer {
 
         while (changed) {
             changed = false;
-            // Recopilar variables usadas como operandos
             Set<String> used = new HashSet<String>();
             for (IntermediateInstruction ins : current) {
                 if (ins.arg1 != null) used.add(ins.arg1);
                 if (ins.arg2 != null) used.add(ins.arg2);
-                // El destino del salto en IFT se considera "usado" (es una etiqueta)
                 if (ins.operator.equals("IFT") && ins.result != null) used.add(ins.result);
             }
 
@@ -456,8 +319,6 @@ class DeadCodeElimination implements Optimizer {
             for (IntermediateInstruction ins : current) {
                 boolean isDead = false;
                 if (ins.result != null && !used.contains(ins.result)) {
-                    // [NUEVO] Eliminamos TODO lo que no se use (sea temporal o variable del usuario)
-                    // Protegemos operaciones críticas que no deben borrarse aunque su resultado no se lea
                     if (!ins.operator.equals("READ") &&
                         !ins.operator.equals("NEWMAT") &&
                         !ins.operator.equals("WRITE") &&
@@ -480,19 +341,14 @@ class DeadCodeElimination implements Optimizer {
 
 // ============================================================
 // PIPELINE DE OPTIMIZACIÓN
-// Orden: Peephole -> CSE → CopyPropagation → LICM → DCE
-// Se ejecuta el pipeline hasta asegurar convergencia total.
 // ============================================================
 class OptimizationPipeline {
     private List<Optimizer> optimizers = new ArrayList<Optimizer>();
-
     public void addOptimizer(Optimizer opt) { optimizers.add(opt); }
 
     public List<IntermediateInstruction> run(List<IntermediateInstruction> code) {
         List<IntermediateInstruction> result = new ArrayList<IntermediateInstruction>(code);
         int prevSize = -1;
-
-        // Ejecutar TODAS las optimizaciones en bucle hasta que el tamaño de la lista ya no se reduzca
         while (result.size() != prevSize) {
             prevSize = result.size();
             for (Optimizer opt : optimizers) {
@@ -521,10 +377,8 @@ class Symbol {
 
 class MemoryManager {
     private int nextFreeAddress = 0;
-    public int allocate(String type) { int a = nextFreeAddress;
-        nextFreeAddress += 4; return a; }
-    public int allocate(int totalSize) { int a = nextFreeAddress;
-        nextFreeAddress += totalSize; return a; }
+    public int allocate(String type) { int a = nextFreeAddress; nextFreeAddress += 4; return a; }
+    public int allocate(int totalSize) { int a = nextFreeAddress; nextFreeAddress += totalSize; return a; }
 }
 
 class SymbolTable {
@@ -533,7 +387,6 @@ class SymbolTable {
     private String currentScope = "GLOBAL";
 
     public SymbolTable(MemoryManager mm) { this.memoryManager = mm; }
-
     public void setScope(String scope) { this.currentScope = scope; }
     public String getScope() { return currentScope; }
 
@@ -600,7 +453,6 @@ class CodeGeneratorWalker {
     }
 
     private String newTemp() { return "t" + (++tempCounter); }
-
     public ExpressionResult walk(ExprNode node) { return walk(node, 0, 0); }
 
     public ExpressionResult walk(ExprNode node, int line, int col) {
@@ -695,8 +547,7 @@ class CodeGeneratorWalker {
                             "Ambos operandos del mismo tipo numerico.",
                             "Asegurese de que ambos operandos sean INTEGER o ambos REAL."));
                     }
-                    resultType = (left.type.equals("REAL") || right.type.equals("REAL")) ?
-                        "REAL" : "INTEGER";
+                    resultType = (left.type.equals("REAL") || right.type.equals("REAL")) ? "REAL" : "INTEGER";
                 }
             } else if (op.equalsIgnoreCase("AND") || op.equalsIgnoreCase("OR")) {
                 if (!left.type.equals("BOOLEAN") && !left.type.equals("UNKNOWN")) {
@@ -751,8 +602,7 @@ class CodeGeneratorWalker {
 
 class ExpressionResult {
     String operand, type;
-    public ExpressionResult(String operand, String type) { this.operand = operand;
-        this.type = type; }
+    public ExpressionResult(String operand, String type) { this.operand = operand; this.type = type; }
 }
 
 // ============================================================
@@ -762,8 +612,8 @@ public class Felix implements FelixConstants {
     private MemoryManager memoryManager = new MemoryManager();
     private SymbolTable symbolTable = new SymbolTable(memoryManager);
     private List<SemanticError> semanticErrors = new ArrayList<SemanticError>();
-    // [CAMBIO 3] Lista para acumular errores léxicos sin detener el análisis
     public List<String> lexicErrors = new ArrayList<String>();
+    public List<String> syntaxErrors = new ArrayList<String>();
     private List<IntermediateInstruction> intermediateCode = new ArrayList<IntermediateInstruction>();
     private Stack<ExprNode> semanticStack = new Stack<ExprNode>();
     private int labelCounter = 0;
@@ -773,14 +623,11 @@ public class Felix implements FelixConstants {
         return new CodeGeneratorWalker(symbolTable, semanticErrors, intermediateCode);
     }
 
-    // [CAMBIO 3] Inyecta la referencia del parser en el TokenManager para que
-    // el token ERROR pueda registrar errores léxicos en lexicErrors.
     private void initTokenManager() {
         token_source.parserRef = this;
     }
 
     public static void main(String[] args) {
-        // Archivo fuente
         java.io.InputStream inputStream = System.in;
         String sourceFileName = "entrada";
 
@@ -794,44 +641,28 @@ public class Felix implements FelixConstants {
             }
         }
 
-        // Nombre del .txt de salida
         String baseName = sourceFileName;
         int dotIndex = sourceFileName.lastIndexOf('.');
         if (dotIndex > 0) baseName = sourceFileName.substring(0, dotIndex);
         String outputFileName = baseName + "_cuadruples.txt";
-        // Timestamp
         java.time.LocalDateTime now = java.time.LocalDateTime.now();
-        java.time.format.DateTimeFormatter fmt =
-            java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
         String timestamp = now.format(fmt);
-        // [CAMBIO 3] Analizar: se acumulan errores léxicos con la lista lexicErrors
-        // en lugar de lanzar excepción y detener el análisis en el primer token inválido.
+
         Felix parser = new Felix(inputStream);
-        boolean syntaxError = false;
-        String syntaxErrorDetail = "";
         try {
             parser.Start();
         } catch (ParseException e) {
-            // [CAMBIO 3] Error sintáctico: se registra el detalle pero NO se aborta;
-            // los errores semánticos ya acumulados siguen siendo válidos.
-            syntaxError = true;
-            syntaxErrorDetail =
-                "L\u00ednea " + e.currentToken.next.beginLine +
-                ", Columna " + e.currentToken.next.beginColumn + ": " +
-                traducirExpectedTokens(e);
+            Token errTok = e.currentToken != null && e.currentToken.next != null ? e.currentToken.next : e.currentToken;
+            int eLine = errTok != null ? errTok.beginLine : 0;
+            int eCol  = errTok != null ? errTok.beginColumn : 0;
+            parser.syntaxErrors.add("L\u00ednea " + eLine + ", Columna " + eCol + ": " + traducirExpectedTokens(e));
         } catch (TokenMgrError e) {
-            // [CAMBIO 3] Error léxico fatal (TokenMgrError ya no debería llegar aquí
-            // porque el token ERROR del lexer lo captura, pero se conserva por seguridad).
-            syntaxError = true;
-            syntaxErrorDetail = "Car\u00e1cter no reconocido (error l\u00e9xico).";
+            parser.syntaxErrors.add("Car\u00e1cter no reconocido (error l\u00e9xico fatal).");
         }
 
-        // [CAMBIO 2] Determinar si hay CUALQUIER tipo de error antes de escribir el archivo
-        boolean hayErrores = syntaxError
-            || !parser.semanticErrors.isEmpty()
-            || !parser.lexicErrors.isEmpty();
-        // ── Terminal: mostrar todos los errores acumulados ─────────────────
-        // [CAMBIO 2] Mensajes con tildes correctas
+        boolean hayErrores = !parser.syntaxErrors.isEmpty() || !parser.semanticErrors.isEmpty() || !parser.lexicErrors.isEmpty();
+
         if (!parser.lexicErrors.isEmpty()) {
             System.out.println("\n==================================================");
             System.out.println("ERRORES L\u00c9XICOS DETECTADOS (" + parser.lexicErrors.size() + "):");
@@ -841,11 +672,14 @@ public class Felix implements FelixConstants {
             }
         }
 
-        if (syntaxError) {
+        if (!parser.syntaxErrors.isEmpty()) {
             System.out.println("\n==================================================");
-            System.out.println("ERROR SINT\u00c1CTICO");
-            System.out.println("\nDetalle: " + syntaxErrorDetail);
+            System.out.println("ERRORES SINT\u00c1CTICOS DETECTADOS (" + parser.syntaxErrors.size() + "):");
             System.out.println("==================================================");
+            for (int i = 0; i < parser.syntaxErrors.size(); i++) {
+                System.out.println("\n  Error " + (i + 1) + ": " + parser.syntaxErrors.get(i));
+            }
+            System.out.println("\n==================================================");
         }
 
         if (!parser.semanticErrors.isEmpty()) {
@@ -854,11 +688,8 @@ public class Felix implements FelixConstants {
             }
         }
 
-        // Estado final en terminal
         if (hayErrores) {
-            int total = parser.lexicErrors.size()
-                      + (syntaxError ? 1 : 0)
-                      + parser.semanticErrors.size();
+            int total = parser.lexicErrors.size() + parser.syntaxErrors.size() + parser.semanticErrors.size();
             System.out.println("\n==================================================");
             System.out.println("ESTADO FINAL: Compilaci\u00f3n con " + total + " error(es). No se gener\u00f3 c\u00f3digo intermedio.");
             System.out.println("==================================================\n");
@@ -868,9 +699,7 @@ public class Felix implements FelixConstants {
             System.out.println("==================================================\n");
         }
 
-        // [CAMBIO 1] El archivo de cuádruples SOLO se genera si NO hay errores
         if (!hayErrores) {
-
             // --- 1. GENERAR ARCHIVO SIN OPTIMIZAR ---
             StringBuilder sbUnopt = new StringBuilder();
             sbUnopt.append("==================================================\n");
@@ -895,8 +724,7 @@ public class Felix implements FelixConstants {
                 pwUnopt = new java.io.PrintWriter(new java.io.OutputStreamWriter(new java.io.FileOutputStream(unoptFileName), "UTF-8"));
                 pwUnopt.print(sbUnopt.toString());
             } catch (Exception ex) {
-            } finally { if (pwUnopt != null) pwUnopt.close();
-            }
+            } finally { if (pwUnopt != null) pwUnopt.close(); }
 
             // --- 2. PASAR POR EL PIPELINE DE OPTIMIZACIÓN ---
             OptimizationPipeline pipeline = new OptimizationPipeline();
@@ -906,6 +734,7 @@ public class Felix implements FelixConstants {
             pipeline.addOptimizer(new LoopInvariantCodeMotion());
             pipeline.addOptimizer(new DeadCodeElimination());
             List<IntermediateInstruction> finalCode = pipeline.run(parser.intermediateCode);
+
             // --- 3. GENERAR ARCHIVO OPTIMIZADO ---
             StringBuilder sbOpt = new StringBuilder();
             sbOpt.append("==================================================\n");
@@ -931,9 +760,7 @@ public class Felix implements FelixConstants {
                 pwOpt.print(sbOpt.toString());
                 System.out.println("Archivos generados exitosamente: \n- " + unoptFileName + "\n- " + optFileName);
             } catch (Exception ex) {
-            } finally { if (pwOpt != null) pwOpt.close();
-            }
-
+            } finally { if (pwOpt != null) pwOpt.close(); }
         }
     }
 
@@ -961,33 +788,84 @@ public class Felix implements FelixConstants {
         return "Se esperaba uno de: " + String.join(", ", expected);
     }
 
-// ============================================================
-// GRAMMAR
-// ============================================================
-// [CAMBIO 3] Se llama a initTokenManager() para registrar errores léxicos
-// acumulativamente sin lanzar excepción al encontrar caracteres inválidos.
-  final public void Start() throws ParseException {
-      initTokenManager();
-    label_1:
-    while (true) {
-      switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-      case SET:
-      case WRITE:
-      case READ:
-      case IF:
-      case NEW:
-      case WHILE:
-      case FOR:
-      case SWITCH:
-        ;
-        break;
-      default:
-        jj_la1[0] = jj_gen;
-        break label_1;
-      }
-      Statement();
+  void expectSemicolon() throws ParseException {
+    Token t = getToken(1);
+    if (t.kind == SEMICOLON) {
+        getNextToken();
+    } else {
+        syntaxErrors.add("L\u00ednea " + t.beginLine + ", Columna " + t.beginColumn + ": Se esperaba ';'");
+        Token syncTok = getToken(1);
+        while (syncTok.kind != SEMICOLON && syncTok.kind != EOF) {
+            if (syncTok.kind == SET || syncTok.kind == WRITE || syncTok.kind == READ ||
+                syncTok.kind == IF  || syncTok.kind == WHILE || syncTok.kind == FOR  ||
+                syncTok.kind == SWITCH || syncTok.kind == NEW ||
+                syncTok.kind == ELSE   || syncTok.kind == ENDIF || syncTok.kind == ENDWHILE ||
+                syncTok.kind == ENDFOR || syncTok.kind == ENDSWITCH) {
+                break;
+            }
+            getNextToken();
+            syncTok = getToken(1);
+        }
+        if (getToken(1).kind == SEMICOLON) {
+            getNextToken();
+        }
     }
-    jj_consume_token(0);
+  }
+
+  void expectTo() throws ParseException {
+    Token t = getToken(1);
+    if (t.kind == TO) {
+        getNextToken();
+    } else {
+        syntaxErrors.add("L\u00ednea " + t.beginLine + ", Columna " + t.beginColumn + ": Se esperaba 'TO'");
+        if (t.kind == ASSIGN_OP) {
+            getNextToken();
+        }
+    }
+  }
+
+  void expectEndIf() throws ParseException {
+    Token t = getToken(1);
+    if (t.kind == ENDIF) {
+        getNextToken();
+    } else {
+        syntaxErrors.add("L\u00ednea " + t.beginLine + ", Columna " + t.beginColumn + ": Se esperaba 'ENDIF'");
+    }
+  }
+
+  final public void SafeStatement() throws ParseException {
+    try {
+      Statement();
+    } catch (ParseException e) {
+        Token errTok = e.currentToken != null && e.currentToken.next != null
+                     ? e.currentToken.next : e.currentToken;
+        int eLine = errTok != null ? errTok.beginLine : 0;
+        int eCol  = errTok != null ? errTok.beginColumn : 0;
+        syntaxErrors.add(
+            "L\u00ednea " + eLine + ", Columna " + eCol + ": " +
+            traducirExpectedTokens(e)
+        );
+        Token t = token;
+        while (t.kind != SEMICOLON && t.kind != EOF) {
+            if (t.next != null && (
+                t.next.kind == SET   || t.next.kind == WRITE  || t.next.kind == READ ||
+                t.next.kind == IF    || t.next.kind == WHILE  || t.next.kind == FOR  ||
+                t.next.kind == SWITCH || t.next.kind == NEW   ||
+                t.next.kind == ELSE  || t.next.kind == ENDIF  || t.next.kind == ENDWHILE ||
+                t.next.kind == ENDFOR || t.next.kind == ENDSWITCH)) {
+                break;
+            }
+            t = getNextToken();
+        }
+    }
+  }
+
+  void Start() throws ParseException {
+    initTokenManager();
+    while (getToken(1).kind != EOF) {
+        SafeStatement();
+    }
+    jj_consume_token(EOF);
   }
 
   final public void Statement() throws ParseException {
@@ -1017,21 +895,20 @@ public class Felix implements FelixConstants {
       SwitchStatement();
       break;
     default:
-      jj_la1[1] = jj_gen;
+      jj_la1[0] = jj_gen;
       jj_consume_token(-1);
       throw new ParseException();
     }
   }
 
   final public void Asignacion() throws ParseException {
-                      Token id;
-    ExprNode tree; int line, col;
+                      Token id; ExprNode tree; int line, col;
     jj_consume_token(SET);
     id = jj_consume_token(IDENTIFIER);
                             line = id.beginLine; col = id.beginColumn;
-    jj_consume_token(TO);
+    expectTo();
     Expression();
-    jj_consume_token(SEMICOLON);
+    expectSemicolon();
         tree = semanticStack.pop();
         ExpressionResult res = walker().walk(tree, line, col);
         String varType = res.type.equals("UNKNOWN") ? "INTEGER" : res.type;
@@ -1051,12 +928,11 @@ public class Felix implements FelixConstants {
   }
 
   final public void EscribirTexto() throws ParseException {
-                         ExprNode tree;
-    Token t;
+                         ExprNode tree; Token t;
     jj_consume_token(WRITE);
               t = token;
     Expression();
-    jj_consume_token(SEMICOLON);
+    expectSemicolon();
         tree = semanticStack.pop();
         ExpressionResult res = walker().walk(tree, t.beginLine, t.beginColumn);
         intermediateCode.add(new IntermediateInstruction("WRITE", res.operand, null, null));
@@ -1073,7 +949,7 @@ public class Felix implements FelixConstants {
     jj_consume_token(LBRACKET);
     d2 = jj_consume_token(INTEGER_LIT);
     jj_consume_token(RBRACKET);
-    jj_consume_token(SEMICOLON);
+    expectSemicolon();
         boolean ok = symbolTable.addMatrix(id.image,
             Integer.parseInt(d1.image), Integer.parseInt(d2.image));
         if (!ok) {
@@ -1090,7 +966,7 @@ public class Felix implements FelixConstants {
                         Token id;
     jj_consume_token(READ);
     id = jj_consume_token(IDENTIFIER);
-    jj_consume_token(SEMICOLON);
+    expectSemicolon();
         if (!symbolTable.isDeclared(id.image)) {
             symbolTable.addVariable(id.image, "UNKNOWN");
         }
@@ -1103,7 +979,7 @@ public class Felix implements FelixConstants {
   final public void Expression() throws ParseException {
                       Token op;
     Term();
-    label_2:
+    label_1:
     while (true) {
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
       case AND:
@@ -1119,8 +995,8 @@ public class Felix implements FelixConstants {
         ;
         break;
       default:
-        jj_la1[2] = jj_gen;
-        break label_2;
+        jj_la1[1] = jj_gen;
+        break label_1;
       }
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
       case PLUS:
@@ -1154,7 +1030,7 @@ public class Felix implements FelixConstants {
         op = jj_consume_token(OR);
         break;
       default:
-        jj_la1[3] = jj_gen;
+        jj_la1[2] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
@@ -1167,7 +1043,7 @@ public class Felix implements FelixConstants {
   final public void Term() throws ParseException {
                 Token op;
     Factor();
-    label_3:
+    label_2:
     while (true) {
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
       case TIMES:
@@ -1175,8 +1051,8 @@ public class Felix implements FelixConstants {
         ;
         break;
       default:
-        jj_la1[4] = jj_gen;
-        break label_3;
+        jj_la1[3] = jj_gen;
+        break label_2;
       }
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
       case TIMES:
@@ -1186,7 +1062,7 @@ public class Felix implements FelixConstants {
         op = jj_consume_token(DIV);
         break;
       default:
-        jj_la1[5] = jj_gen;
+        jj_la1[4] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
@@ -1205,15 +1081,15 @@ public class Felix implements FelixConstants {
       break;
     case REAL_LIT:
       t = jj_consume_token(REAL_LIT);
-                         semanticStack.push(new LiteralNode(t.image, "REAL"));
+                           semanticStack.push(new LiteralNode(t.image, "REAL"));
       break;
     case STRING_LITERAL:
       t = jj_consume_token(STRING_LITERAL);
-                         semanticStack.push(new LiteralNode(t.image, "STRING"));
+                           semanticStack.push(new LiteralNode(t.image, "STRING"));
       break;
     case TRUE:
       jj_consume_token(TRUE);
-                         semanticStack.push(new LiteralNode("true",  "BOOLEAN"));
+                           semanticStack.push(new LiteralNode("true",  "BOOLEAN"));
       break;
     case FALSE:
       jj_consume_token(FALSE);
@@ -1232,7 +1108,7 @@ public class Felix implements FelixConstants {
         semanticStack.push(new UnaryOpNode("NEG", negOperand));
       break;
     default:
-      jj_la1[6] = jj_gen;
+      jj_la1[5] = jj_gen;
       if (jj_2_1(2)) {
         t = jj_consume_token(IDENTIFIER);
         jj_consume_token(LBRACKET);
@@ -1247,7 +1123,7 @@ public class Felix implements FelixConstants {
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
         case IDENTIFIER:
           t = jj_consume_token(IDENTIFIER);
-                     semanticStack.push(new VariableNode(t.image));
+                       semanticStack.push(new VariableNode(t.image));
           break;
         case LPAREN:
           jj_consume_token(LPAREN);
@@ -1255,7 +1131,7 @@ public class Felix implements FelixConstants {
           jj_consume_token(RPAREN);
           break;
         default:
-          jj_la1[7] = jj_gen;
+          jj_la1[6] = jj_gen;
           jj_consume_token(-1);
           throw new ParseException();
         }
@@ -1267,8 +1143,7 @@ public class Felix implements FelixConstants {
 // CONTROL STRUCTURES
 // ============================================================
   final public void Condicional() throws ParseException {
-                       ExprNode tree;
-    Token t; String lTrue, lFalse, lEnd;
+                       ExprNode tree; Token t; String lTrue, lFalse, lEnd;
     jj_consume_token(IF);
            t = token;
     Expression();
@@ -1285,7 +1160,7 @@ public class Felix implements FelixConstants {
         intermediateCode.add(new IntermediateInstruction("GOTO",  null,        null, lFalse));
         intermediateCode.add(new IntermediateInstruction("LABEL", null,        null, lTrue));
     jj_consume_token(THEN);
-    label_4:
+    label_3:
     while (true) {
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
       case SET:
@@ -1299,17 +1174,17 @@ public class Felix implements FelixConstants {
         ;
         break;
       default:
-        jj_la1[8] = jj_gen;
-        break label_4;
+        jj_la1[7] = jj_gen;
+        break label_3;
       }
-      Statement();
+      SafeStatement();
     }
     switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
     case ELSE:
       jj_consume_token(ELSE);
         intermediateCode.add(new IntermediateInstruction("GOTO",  null, null, lEnd));
         intermediateCode.add(new IntermediateInstruction("LABEL", null, null, lFalse));
-      label_5:
+      label_4:
       while (true) {
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
         case SET:
@@ -1323,18 +1198,18 @@ public class Felix implements FelixConstants {
           ;
           break;
         default:
-          jj_la1[9] = jj_gen;
-          break label_5;
+          jj_la1[8] = jj_gen;
+          break label_4;
         }
-        Statement();
+        SafeStatement();
       }
         intermediateCode.add(new IntermediateInstruction("LABEL", null, null, lEnd));
       break;
     default:
-      jj_la1[10] = jj_gen;
+      jj_la1[9] = jj_gen;
       ;
     }
-    jj_consume_token(ENDIF);
+    expectEndIf();
         intermediateCode.add(new IntermediateInstruction("LABEL", null, null, lFalse));
   }
 
@@ -1358,7 +1233,7 @@ public class Felix implements FelixConstants {
         intermediateCode.add(new IntermediateInstruction("GOTO",  null,        null, lEnd));
         intermediateCode.add(new IntermediateInstruction("LABEL", null,        null, lBody));
     jj_consume_token(DO);
-    label_6:
+    label_5:
     while (true) {
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
       case SET:
@@ -1372,10 +1247,10 @@ public class Felix implements FelixConstants {
         ;
         break;
       default:
-        jj_la1[11] = jj_gen;
-        break label_6;
+        jj_la1[10] = jj_gen;
+        break label_5;
       }
-      Statement();
+      SafeStatement();
     }
     jj_consume_token(ENDWHILE);
         intermediateCode.add(new IntermediateInstruction("GOTO",  null, null, lCond));
@@ -1400,7 +1275,7 @@ public class Felix implements FelixConstants {
         intermediateCode.add(new IntermediateInstruction("IFT",   condTemp,    null,      lBody));
         intermediateCode.add(new IntermediateInstruction("GOTO",  null,        null,      lEnd));
         intermediateCode.add(new IntermediateInstruction("LABEL", null,        null,      lBody));
-    label_7:
+    label_6:
     while (true) {
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
       case SET:
@@ -1414,10 +1289,10 @@ public class Felix implements FelixConstants {
         ;
         break;
       default:
-        jj_la1[12] = jj_gen;
-        break label_7;
+        jj_la1[11] = jj_gen;
+        break label_6;
       }
-      Statement();
+      SafeStatement();
     }
     jj_consume_token(ENDFOR);
         intermediateCode.add(new IntermediateInstruction("+",     id.image,    "1",       incTemp));
@@ -1438,15 +1313,15 @@ public class Felix implements FelixConstants {
                 "Una variable previamente declarada.",
                 "Declare la variable antes del SWITCH."));
         }
-    label_8:
+    label_7:
     while (true) {
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
       case CASE:
         ;
         break;
       default:
-        jj_la1[13] = jj_gen;
-        break label_8;
+        jj_la1[12] = jj_gen;
+        break label_7;
       }
       jj_consume_token(CASE);
       num = jj_consume_token(INTEGER_LIT);
@@ -1457,6 +1332,32 @@ public class Felix implements FelixConstants {
         intermediateCode.add(new IntermediateInstruction("IFT",   condTemp, null,      lCase));
         intermediateCode.add(new IntermediateInstruction("GOTO",  null,     null,      skipLabel));
         intermediateCode.add(new IntermediateInstruction("LABEL", null,     null,      lCase));
+      label_8:
+      while (true) {
+        switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
+        case SET:
+        case WRITE:
+        case READ:
+        case IF:
+        case NEW:
+        case WHILE:
+        case FOR:
+        case SWITCH:
+          ;
+          break;
+        default:
+          jj_la1[13] = jj_gen;
+          break label_8;
+        }
+        SafeStatement();
+      }
+        intermediateCode.add(new IntermediateInstruction("GOTO",  null, null, lEnd));
+        intermediateCode.add(new IntermediateInstruction("LABEL", null, null, skipLabel));
+    }
+    switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
+    case DEFAULT_CASE:
+      jj_consume_token(DEFAULT_CASE);
+        intermediateCode.add(new IntermediateInstruction("LABEL", null, null, newLabel()));
       label_9:
       while (true) {
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
@@ -1474,37 +1375,11 @@ public class Felix implements FelixConstants {
           jj_la1[14] = jj_gen;
           break label_9;
         }
-        Statement();
-      }
-        intermediateCode.add(new IntermediateInstruction("GOTO",  null, null, lEnd));
-        intermediateCode.add(new IntermediateInstruction("LABEL", null, null, skipLabel));
-    }
-    switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-    case DEFAULT_CASE:
-      jj_consume_token(DEFAULT_CASE);
-        intermediateCode.add(new IntermediateInstruction("LABEL", null, null, newLabel()));
-      label_10:
-      while (true) {
-        switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-        case SET:
-        case WRITE:
-        case READ:
-        case IF:
-        case NEW:
-        case WHILE:
-        case FOR:
-        case SWITCH:
-          ;
-          break;
-        default:
-          jj_la1[15] = jj_gen;
-          break label_10;
-        }
-        Statement();
+        SafeStatement();
       }
       break;
     default:
-      jj_la1[16] = jj_gen;
+      jj_la1[15] = jj_gen;
       ;
     }
     jj_consume_token(ENDSWITCH);
@@ -1538,7 +1413,7 @@ public class Felix implements FelixConstants {
   private boolean jj_lookingAhead = false;
   private boolean jj_semLA;
   private int jj_gen;
-  final private int[] jj_la1 = new int[17];
+  final private int[] jj_la1 = new int[16];
   static private int[] jj_la1_0;
   static private int[] jj_la1_1;
   static {
@@ -1546,10 +1421,10 @@ public class Felix implements FelixConstants {
       jj_la1_init_1();
    }
    private static void jj_la1_init_0() {
-      jj_la1_0 = new int[] {0x29023a0,0x29023a0,0xc0018000,0xc0018000,0x0,0x0,0x800e0000,0x0,0x29023a0,0x29023a0,0x800,0x29023a0,0x29023a0,0x4000000,0x29023a0,0x29023a0,0x8000000,};
+      jj_la1_0 = new int[] {0x29023a0,0xc0018000,0xc0018000,0x0,0x0,0x800e0000,0x0,0x29023a0,0x29023a0,0x800,0x29023a0,0x29023a0,0x4000000,0x29023a0,0x29023a0,0x8000000,};
    }
    private static void jj_la1_init_1() {
-      jj_la1_1 = new int[] {0x0,0x0,0xfc0,0xfc0,0x3,0x3,0x16000,0x8004,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,};
+      jj_la1_1 = new int[] {0x0,0xfc0,0xfc0,0x3,0x3,0x16000,0x8004,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,};
    }
   final private JJCalls[] jj_2_rtns = new JJCalls[1];
   private boolean jj_rescan = false;
@@ -1566,7 +1441,7 @@ public class Felix implements FelixConstants {
     token = new Token();
     jj_ntk = -1;
     jj_gen = 0;
-    for (int i = 0; i < 17; i++) jj_la1[i] = -1;
+    for (int i = 0; i < 16; i++) jj_la1[i] = -1;
     for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -1581,7 +1456,7 @@ public class Felix implements FelixConstants {
     token = new Token();
     jj_ntk = -1;
     jj_gen = 0;
-    for (int i = 0; i < 17; i++) jj_la1[i] = -1;
+    for (int i = 0; i < 16; i++) jj_la1[i] = -1;
     for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -1592,7 +1467,7 @@ public class Felix implements FelixConstants {
     token = new Token();
     jj_ntk = -1;
     jj_gen = 0;
-    for (int i = 0; i < 17; i++) jj_la1[i] = -1;
+    for (int i = 0; i < 16; i++) jj_la1[i] = -1;
     for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -1603,7 +1478,7 @@ public class Felix implements FelixConstants {
     token = new Token();
     jj_ntk = -1;
     jj_gen = 0;
-    for (int i = 0; i < 17; i++) jj_la1[i] = -1;
+    for (int i = 0; i < 16; i++) jj_la1[i] = -1;
     for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -1613,7 +1488,7 @@ public class Felix implements FelixConstants {
     token = new Token();
     jj_ntk = -1;
     jj_gen = 0;
-    for (int i = 0; i < 17; i++) jj_la1[i] = -1;
+    for (int i = 0; i < 16; i++) jj_la1[i] = -1;
     for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -1623,7 +1498,7 @@ public class Felix implements FelixConstants {
     token = new Token();
     jj_ntk = -1;
     jj_gen = 0;
-    for (int i = 0; i < 17; i++) jj_la1[i] = -1;
+    for (int i = 0; i < 16; i++) jj_la1[i] = -1;
     for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -1743,7 +1618,7 @@ public class Felix implements FelixConstants {
       la1tokens[jj_kind] = true;
       jj_kind = -1;
     }
-    for (int i = 0; i < 17; i++) {
+    for (int i = 0; i < 16; i++) {
       if (jj_la1[i] == jj_gen) {
         for (int j = 0; j < 32; j++) {
           if ((jj_la1_0[i] & (1<<j)) != 0) {
