@@ -3,25 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Felix Compilador</title>
+    <title>Felix Compilador — IDE</title>
+    <meta name="description" content="Felix: Compilador académico con análisis léxico, sintáctico, semántico, generación de cuádruples, optimización y generación de código ensamblador ARM64/x86_64.">
     <link rel="stylesheet" href="dist/output.css">
     <link rel="stylesheet" href="style.css">
 </head>
 <body class="h-screen flex flex-col p-4 bg-editor text-foreground font-mono">
 
-    <header class="flex justify-center mb-4 space-x-4 border-b border-divider pb-2 relative">
+    <header class="flex justify-center mb-4 space-x-2 border-b border-divider pb-2 relative items-center flex-wrap gap-y-2">
         <h1 class="text-blue-400 font-bold absolute left-4 text-xl">FELIX COMPILADOR</h1>
         
-        <button id="tab-jj" onclick="setWorkspace('jj')" class="px-4 py-1 hover:bg-panel-hover rounded text-gray-300 transition-colors">Código .jj</button>
-        <button id="tab-intermedio" onclick="setWorkspace('intermedio')" class="px-4 py-1 hover:bg-panel-hover rounded text-gray-300 transition-colors">Código Intermedio</button>
-        <button id="tab-optimizado" onclick="setWorkspace('optimizado')" class="px-4 py-1 hover:bg-panel-hover rounded text-gray-300 transition-colors">Código Optimizado</button>
-        
-        <button onclick="addCustomPanel()" class="px-4 py-1 hover:bg-panel-hover rounded text-yellow-400 transition-colors">+ Agregar panel</button>
+        <!-- Tabs principales -->
+        <button id="tab-jj" onclick="setWorkspace('jj')" class="px-4 py-1 hover:bg-panel-hover rounded text-gray-300 transition-colors text-sm">Código .jj</button>
+        <button id="tab-intermedio" onclick="setWorkspace('intermedio')" class="px-4 py-1 hover:bg-panel-hover rounded text-gray-300 transition-colors text-sm">Código Intermedio</button>
+        <button id="tab-optimizado" onclick="setWorkspace('optimizado')" class="px-4 py-1 hover:bg-panel-hover rounded text-gray-300 transition-colors text-sm">Código Optimizado</button>
+
+        <!-- Separador visual -->
+        <span class="text-gray-600 mx-1">│</span>
+
+        <!-- Tabs de ensamblador con badges -->
+        <button id="tab-asm-arm64" onclick="setWorkspace('asm-arm64')" class="px-3 py-1 hover:bg-panel-hover rounded text-gray-300 transition-colors text-sm flex items-center gap-1">
+            ASM ARM64
+            <span id="badge-arm64" class="arch-badge disabled">—</span>
+        </button>
+        <button id="tab-asm-x86" onclick="setWorkspace('asm-x86')" class="px-3 py-1 hover:bg-panel-hover rounded text-gray-300 transition-colors text-sm flex items-center gap-1">
+            ASM x86_64
+            <span id="badge-x86" class="arch-badge disabled">—</span>
+        </button>
     </header>
 
-    <div class="flex flex-1 gap-4 overflow-hidden">
+    <div class="flex flex-1 gap-0 overflow-hidden">
         
-        <aside class="w-1/5 panel rounded-lg p-4 flex flex-col gap-4 overflow-y-auto min-w-[250px]">
+        <aside class="w-1/6 panel rounded-lg p-4 flex flex-col gap-4 overflow-y-auto min-w-[220px]" style="flex-shrink: 0;">
             <h2 class="text-sm text-gray-400 text-center mb-2">PROCESOS DE OPTIMIZACIÓN</h2>
             
             <button onclick="loadExample('cse')" class="opt-btn">
@@ -41,15 +54,24 @@
                 Selecciona una optimización para ver su explicación.
             </div>
 
-            <div class="mt-4 pt-4 border-t border-divider">
+            <!-- Indicador de arquitectura -->
+            <div class="arch-indicator" id="arch-indicator">
+                <div class="arch-name" id="arch-name">Detectando...</div>
+                <div class="arch-detail" id="arch-detail">Consultando servidor</div>
+            </div>
+
+            <div class="pt-4 border-t border-divider">
                 <button onclick="compileCode()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded shadow-lg transition-colors">
                     ▶ EJECUTAR FELIX
                 </button>
             </div>
         </aside>
 
-        <main id="workspace" class="flex-1 flex gap-4 overflow-x-auto">
-            </main>
+        <!-- Separador sidebar-workspace -->
+        <div class="resize-handle ml-2" data-handle="sidebar"></div>
+
+        <main id="workspace" class="flex-1 flex gap-0 overflow-x-auto ml-2">
+        </main>
 
     </div>
 

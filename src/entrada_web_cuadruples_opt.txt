@@ -1,24 +1,11 @@
 ==================================================
-  COMPILADOR FELIX - CÓDIGO INTERMEDIO (Optimizados)
+Codigo optimizado
 ==================================================
-Archivo fuente : entrada_web.txt
-Fecha y hora   : 22/04/2026 02:04:02
-==================================================
-
 No.    Operador     Argumento 1    Argumento 2    Resultado   
 --------------------------------------------------
-0      LABEL        -              -              L1          
-1      <            0              50             t1          
-2      IFT          t1             -              L3          
-3      GOTO         -              -              L2          
-4      LABEL        -              -              L3          
-5      WRITE        "Procesando..." -              -           
-6      *            3              100            t1          
-7      /            t1             2              constanteMagica
-8      +            0              constanteMagica resultado   
-9      WRITE        resultado      -              -           
-10     GOTO         -              -              L1          
-11     LABEL        -              -              L2          
+0      *            500.0          0.16           impuesto    
+1      WRITE        "El impuesto a pagar es:" -              -           
+2      WRITE        impuesto       -              -           
 --------------------------------------------------
-Total de instrucciones: 12
+Total de instrucciones: 3
 ==================================================

@@ -654,9 +654,11 @@ public class Felix implements FelixConstants {
             parser.Start();
         } catch (ParseException e) {
             Token errTok = e.currentToken != null && e.currentToken.next != null ? e.currentToken.next : e.currentToken;
-            int eLine = errTok != null ? errTok.beginLine : 0;
-            int eCol  = errTok != null ? errTok.beginColumn : 0;
-            parser.syntaxErrors.add("L\u00ednea " + eLine + ", Columna " + eCol + ": " + traducirExpectedTokens(e));
+            if (errTok == null || errTok.kind != ERROR) {
+                int eLine = errTok != null ? errTok.beginLine : 0;
+                int eCol  = errTok != null ? errTok.beginColumn : 0;
+                parser.syntaxErrors.add("L\u00ednea " + eLine + ", Columna " + eCol + ": " + traducirExpectedTokens(e));
+            }
         } catch (TokenMgrError e) {
             parser.syntaxErrors.add("Car\u00e1cter no reconocido (error l\u00e9xico fatal).");
         }
@@ -703,11 +705,8 @@ public class Felix implements FelixConstants {
             // --- 1. GENERAR ARCHIVO SIN OPTIMIZAR ---
             StringBuilder sbUnopt = new StringBuilder();
             sbUnopt.append("==================================================\n");
-            sbUnopt.append("  COMPILADOR FELIX - C\u00d3DIGO INTERMEDIO (Sin Optimizar)\n");
+            sbUnopt.append("Codigo sin optimizar\n");
             sbUnopt.append("==================================================\n");
-            sbUnopt.append("Archivo fuente : ").append(sourceFileName).append("\n");
-            sbUnopt.append("Fecha y hora   : ").append(timestamp).append("\n");
-            sbUnopt.append("==================================================\n\n");
             sbUnopt.append(String.format("%-6s %-12s %-14s %-14s %-12s\n", "No.", "Operador", "Argumento 1", "Argumento 2", "Resultado"));
             sbUnopt.append("--------------------------------------------------\n");
             int idx1 = 0;
@@ -717,7 +716,6 @@ public class Felix implements FelixConstants {
             }
             sbUnopt.append("--------------------------------------------------\n");
             sbUnopt.append("Total de instrucciones: ").append(parser.intermediateCode.size()).append("\n");
-            sbUnopt.append("==================================================\n");
             String unoptFileName = baseName + "_cuadruples_unopt.txt";
             java.io.PrintWriter pwUnopt = null;
             try {
@@ -738,11 +736,8 @@ public class Felix implements FelixConstants {
             // --- 3. GENERAR ARCHIVO OPTIMIZADO ---
             StringBuilder sbOpt = new StringBuilder();
             sbOpt.append("==================================================\n");
-            sbOpt.append("  COMPILADOR FELIX - C\u00d3DIGO INTERMEDIO (Optimizados)\n");
+            sbOpt.append("Codigo optimizado\n");
             sbOpt.append("==================================================\n");
-            sbOpt.append("Archivo fuente : ").append(sourceFileName).append("\n");
-            sbOpt.append("Fecha y hora   : ").append(timestamp).append("\n");
-            sbOpt.append("==================================================\n\n");
             sbOpt.append(String.format("%-6s %-12s %-14s %-14s %-12s\n", "No.", "Operador", "Argumento 1", "Argumento 2", "Resultado"));
             sbOpt.append("--------------------------------------------------\n");
             int idx2 = 0;
@@ -793,7 +788,9 @@ public class Felix implements FelixConstants {
     if (t.kind == SEMICOLON) {
         getNextToken();
     } else {
-        syntaxErrors.add("L\u00ednea " + t.beginLine + ", Columna " + t.beginColumn + ": Se esperaba ';'");
+        if (t.kind != ERROR) {
+            syntaxErrors.add("L\u00ednea " + t.beginLine + ", Columna " + t.beginColumn + ": Se esperaba ';'");
+        }
         Token syncTok = getToken(1);
         while (syncTok.kind != SEMICOLON && syncTok.kind != EOF) {
             if (syncTok.kind == SET || syncTok.kind == WRITE || syncTok.kind == READ ||
@@ -817,7 +814,9 @@ public class Felix implements FelixConstants {
     if (t.kind == TO) {
         getNextToken();
     } else {
-        syntaxErrors.add("L\u00ednea " + t.beginLine + ", Columna " + t.beginColumn + ": Se esperaba 'TO'");
+        if (t.kind != ERROR) {
+            syntaxErrors.add("L\u00ednea " + t.beginLine + ", Columna " + t.beginColumn + ": Se esperaba 'TO'");
+        }
         if (t.kind == ASSIGN_OP) {
             getNextToken();
         }
@@ -829,7 +828,9 @@ public class Felix implements FelixConstants {
     if (t.kind == ENDIF) {
         getNextToken();
     } else {
-        syntaxErrors.add("L\u00ednea " + t.beginLine + ", Columna " + t.beginColumn + ": Se esperaba 'ENDIF'");
+        if (t.kind != ERROR) {
+            syntaxErrors.add("L\u00ednea " + t.beginLine + ", Columna " + t.beginColumn + ": Se esperaba 'ENDIF'");
+        }
     }
   }
 
@@ -839,12 +840,14 @@ public class Felix implements FelixConstants {
     } catch (ParseException e) {
         Token errTok = e.currentToken != null && e.currentToken.next != null
                      ? e.currentToken.next : e.currentToken;
-        int eLine = errTok != null ? errTok.beginLine : 0;
-        int eCol  = errTok != null ? errTok.beginColumn : 0;
-        syntaxErrors.add(
-            "L\u00ednea " + eLine + ", Columna " + eCol + ": " +
-            traducirExpectedTokens(e)
-        );
+        if (errTok == null || errTok.kind != ERROR) {
+            int eLine = errTok != null ? errTok.beginLine : 0;
+            int eCol  = errTok != null ? errTok.beginColumn : 0;
+            syntaxErrors.add(
+                "L\u00ednea " + eLine + ", Columna " + eCol + ": " +
+                traducirExpectedTokens(e)
+            );
+        }
         Token t = token;
         while (t.kind != SEMICOLON && t.kind != EOF) {
             if (t.next != null && (
@@ -902,18 +905,30 @@ public class Felix implements FelixConstants {
   }
 
   final public void Asignacion() throws ParseException {
-                      Token id; ExprNode tree; int line, col;
+                      Token id; ExprNode tree; int line, col; int errorCountBefore; boolean declaredHere = false;
     jj_consume_token(SET);
     id = jj_consume_token(IDENTIFIER);
-                            line = id.beginLine; col = id.beginColumn;
+        line = id.beginLine; col = id.beginColumn;
+        errorCountBefore = syntaxErrors.size() + lexicErrors.size();
+        if (!symbolTable.isDeclared(id.image)) {
+            symbolTable.addVariable(id.image, "UNKNOWN");
+            declaredHere = true;
+        }
     expectTo();
     Expression();
     expectSemicolon();
         tree = semanticStack.pop();
         ExpressionResult res = walker().walk(tree, line, col);
-        String varType = res.type.equals("UNKNOWN") ? "INTEGER" : res.type;
+        int errorCountAfter = syntaxErrors.size() + lexicErrors.size();
+        String varType = res.type;
+        if (errorCountAfter > errorCountBefore) {
+            varType = "UNKNOWN";
+        }
+
         Symbol existing = symbolTable.lookup(id.image);
-        if (existing != null) {
+        if (declaredHere) {
+            existing.type = varType;
+        } else {
             if (!existing.type.equals(varType) && !varType.equals("UNKNOWN") && !existing.type.equals("UNKNOWN")) {
                 semanticErrors.add(new SemanticError(line, col,
                     "Asignacion incompatible: variable '" + id.image + "' es de tipo '" + existing.type +
@@ -921,8 +936,6 @@ public class Felix implements FelixConstants {
                     "Tipo " + existing.type + ".",
                     "Asigne un valor de tipo " + existing.type + " a la variable."));
             }
-        } else {
-            symbolTable.addVariable(id.image, varType);
         }
         intermediateCode.add(new IntermediateInstruction("=", res.operand, null, id.image));
   }

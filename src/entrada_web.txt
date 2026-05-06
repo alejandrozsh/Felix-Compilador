@@ -1,12 +1,8 @@
-    SET factor TO 3;
-    SET iteracion TO 0;
+    SET tarifaBase TO 500.0;
+    SET tarifaCliente TO tarifaBase;
+    SET cobroFinal TO tarifaCliente;
+    SET impuesto TO cobroFinal * 0.16;
 
-    WHILE (iteracion < 50) DO
-    WRITE "Procesando...";
-    SET constanteMagica TO (factor * 100) / 2;
-    SET resultado TO iteracion + constanteMagica;
-     WRITE resultado;
-    
-    SET iteracion TO iteracion + 1;
-    ENDWHILE
+    WRITE "El impuesto a pagar es:";
+    WRITE impuesto;
     

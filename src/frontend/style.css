@@ -9,6 +9,8 @@
     --text-muted: #9ca3af;
     --accent-blue: #3b82f6;
     --accent-red: rgba(239, 68, 68, 0.5);
+    --accent-green: #22c55e;
+    --accent-purple: #a855f7;
 }
 
 body.bg-editor {
@@ -58,7 +60,140 @@ body.bg-editor {
     background-color: rgba(239, 68, 68, 0.1);
 }
 
-/* Personalización del Scrollbar para que luzca bien en macOS y navegadores webkit */
+/* ==========================================
+   PANELES REDIMENSIONABLES
+   ========================================== */
+.resize-handle {
+    width: 6px;
+    min-width: 6px;
+    cursor: col-resize;
+    background: var(--border-color);
+    transition: background 0.15s;
+    border-radius: 3px;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 10;
+}
+
+.resize-handle:hover,
+.resize-handle.active {
+    background: var(--accent-blue);
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.4);
+}
+
+/* Evitar selección de texto al arrastrar */
+body.resizing {
+    cursor: col-resize !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+}
+
+body.resizing * {
+    cursor: col-resize !important;
+}
+
+/* ==========================================
+   TABS DE ARQUITECTURA
+   ========================================== */
+.tab-disabled {
+    opacity: 0.35;
+    cursor: not-allowed !important;
+    pointer-events: none;
+}
+
+.arch-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 9999px;
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-left: 4px;
+    vertical-align: middle;
+}
+
+.arch-badge.active {
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.arch-badge.disabled {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+/* Indicador de arquitectura en sidebar */
+.arch-indicator {
+    text-align: center;
+    padding: 0.5rem;
+    border-radius: 0.375rem;
+    background: rgba(59, 130, 246, 0.08);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.arch-indicator .arch-name {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--accent-blue);
+}
+
+.arch-indicator .arch-detail {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+/* ==========================================
+   SYNTAX HIGHLIGHTING PARA ENSAMBLADOR
+   ========================================== */
+.asm-viewer {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.75rem;
+    line-height: 1.5;
+    tab-size: 4;
+}
+
+.asm-comment {
+    color: #6a9955;
+    font-style: italic;
+}
+
+.asm-instruction {
+    color: #569cd6;
+    font-weight: bold;
+}
+
+.asm-register {
+    color: #4ec9b0;
+}
+
+.asm-label {
+    color: #dcdcaa;
+    font-weight: bold;
+}
+
+.asm-directive {
+    color: #c586c0;
+}
+
+.asm-number {
+    color: #b5cea8;
+}
+
+.asm-string {
+    color: #ce9178;
+}
+
+.asm-separator {
+    color: #555;
+}
+
+/* ==========================================
+   SCROLLBAR PERSONALIZADO
+   ========================================== */
 ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
