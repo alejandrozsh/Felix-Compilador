@@ -32,6 +32,17 @@ function saveState() {
 
 const appState = loadState();
 
+// ==========================================
+// SOCKET.IO CONNECTION
+// ==========================================
+let socket = null;
+function getSocket() {
+    if (!socket) {
+        socket = io();
+    }
+    return socket;
+}
+
 const explanations = {
     cse: "<b>Eliminación de subexpresiones:</b><br>Detecta operaciones idénticas en el mismo bloque y reutiliza el resultado temporal anterior en lugar de recalcularlo.",
     copy: "<b>Propagación de copias:</b><br>Sustituye variables que son copias directas de otras (ej. x = y) para reducir asignaciones redundantes.",
@@ -436,7 +447,7 @@ function loadExample(type) {
         appState.lastExample = type;
         
         if(type === 'cse') appState.sourceCode = `
-    WRITE "Calculando coordenadas...";
+    WRITE "Calculando coordenadas";
     SET x TO 10;
     SET y TO 20;
     SET z TO 5;
@@ -450,7 +461,7 @@ function loadExample(type) {
     WRITE puntoB;
     `;
         if(type === 'copy') appState.sourceCode = `
-    SET tarifaBase TO 500,0;
+    SET tarifaBase TO 500.0;
     SET tarifaCliente TO tarifaBase;
     SET cobroFinal TO tarifaCliente;
     SET impuesto TO cobroFinal * 0.16;
@@ -463,7 +474,7 @@ function loadExample(type) {
     SET iteracion TO 0;
 
     WHILE (iteracion < 50) DO
-    WRITE "Procesando...";
+    WRITE "Procesando";
     SET constanteMagica TO (factor * 100) / 2;
     SET resultado TO iteracion + constanteMagica;
      WRITE resultado;
@@ -502,6 +513,111 @@ function uploadFile(event) {
     }
 }
 
+// ==========================================
+// UTILIDAD: Escapar HTML
+// ==========================================
+function escapeHTMLContent(str) {
+    return str.replace(/[&<>'"]/g, 
+        tag => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            "'": '&#39;',
+            '"': '&quot;'
+        }[tag])
+    );
+}
+
+// ==========================================
+// EJECUCIÓN INTERACTIVA VIA WEBSOCKET
+// ==========================================
+function startInteractiveExecution() {
+    const s = getSocket();
+    const terminal = document.getElementById('terminal');
+    if (!terminal) return;
+
+    // Limpiar listeners previos para evitar duplicados
+    s.off('program_output');
+    s.off('read_request');
+    s.off('execution_done');
+    s.off('execution_error');
+
+    // Añadir separador de ejecución
+    terminal.innerHTML += `\n<span class="text-blue-400">━━━ Salida del programa ━━━</span>\n`;
+
+    // WRITE: el intérprete envía una línea de salida
+    s.on('program_output', (data) => {
+        terminal.innerHTML += `<span class="text-white">${escapeHTMLContent(data.value)}</span>\n`;
+        terminal.scrollTop = terminal.scrollHeight;
+    });
+
+    // READ: el intérprete pide un valor al usuario
+    s.on('read_request', (data) => {
+        // Crear línea de input interactiva
+        const inputLine = document.createElement('div');
+        inputLine.className = 'terminal-input-line';
+
+        const prompt = document.createElement('span');
+        prompt.className = 'read-prompt';
+        prompt.textContent = `Ingrese valor para '${data.variable}': `;
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.placeholder = 'Escriba un valor y presione Enter...';
+        input.autocomplete = 'off';
+        input.spellcheck = false;
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const value = input.value;
+
+                // Reemplazar el input con el valor ingresado (congelar)
+                inputLine.innerHTML = '';
+                const frozenPrompt = document.createElement('span');
+                frozenPrompt.className = 'read-prompt';
+                frozenPrompt.textContent = `Ingrese valor para '${data.variable}': `;
+                const frozenValue = document.createElement('span');
+                frozenValue.className = 'terminal-read-value';
+                frozenValue.textContent = value || '0';
+                inputLine.appendChild(frozenPrompt);
+                inputLine.appendChild(frozenValue);
+
+                // Enviar el valor al backend
+                s.emit('read_response', { value: value || '0' });
+                terminal.scrollTop = terminal.scrollHeight;
+            }
+        });
+
+        inputLine.appendChild(prompt);
+        inputLine.appendChild(input);
+        terminal.appendChild(inputLine);
+        terminal.scrollTop = terminal.scrollHeight;
+        input.focus();
+    });
+
+    // Ejecución terminó
+    let executionEnded = false;
+    s.on('execution_done', () => {
+        if (executionEnded) return;
+        executionEnded = true;
+        terminal.innerHTML += `<span class="text-blue-400">━━━━━━━━━━━━━━━━━━━━━━━━━━</span>\n`;
+        terminal.scrollTop = terminal.scrollHeight;
+        // Actualizar el estado guardado con el contenido final de la terminal
+        appState.consoleOut = terminal.innerHTML;
+        saveState();
+    });
+
+    // Error de ejecución
+    s.on('execution_error', (data) => {
+        terminal.innerHTML += `<span class="text-red-400">[Error] ${escapeHTMLContent(data.message)}</span>\n`;
+        terminal.scrollTop = terminal.scrollHeight;
+    });
+
+    // Iniciar ejecución
+    s.emit('execute', {});
+}
+
 async function compileCode() {
     const codeArea = document.getElementById('sourceCode');
     if(codeArea) appState.sourceCode = codeArea.value;
@@ -531,44 +647,35 @@ async function compileCode() {
             appState.quadsOpt = "No generado debido a errores.";
             appState.asmARM64 = "No generado debido a errores.";
             appState.asmX86 = "No generado debido a errores.";
+            setWorkspace('optimizado');
         } else {
-            // Construir salida de terminal con resultado del programa
-            const escapeHTML = (str) => str.replace(/[&<>'"]/g, 
-                tag => ({
-                    '&': '&amp;',
-                    '<': '&lt;',
-                    '>': '&gt;',
-                    "'": '&#39;',
-                    '"': '&quot;'
-                }[tag])
-            );
-
-            let terminalHTML = `<span class="text-green-400">✓ Compilación exitosa</span>\n`;
-            
-            if (data.programOutput && data.programOutput.trim()) {
-                terminalHTML += `\n<span class="text-blue-400">━━━ Salida del programa ━━━</span>\n`;
-                terminalHTML += `<span class="text-white">${escapeHTML(data.programOutput.trim())}</span>\n`;
-                terminalHTML += `<span class="text-blue-400">━━━━━━━━━━━━━━━━━━━━━━━━━━</span>`;
-            } else {
-                terminalHTML += `<span class="text-gray-400">(El programa no produce salida)</span>`;
-            }
-            
-            appState.consoleOut = terminalHTML;
+            // Compilación exitosa — guardar cuádruples y ASM
             appState.quadsUnopt = data.quadsUnopt || "Archivo sin optimizar vacío o no encontrado.";
             appState.quadsOpt = data.quadsOpt || "Archivo optimizado vacío o no encontrado.";
             appState.asmARM64 = data.asmARM64 || "Ensamblador ARM64 no generado.";
             appState.asmX86 = data.asmX86 || "Ensamblador x86_64 no generado.";
-        }
-        
-        // Cambiar a vista de ensamblador activo automáticamente
-        if (!data.hasErrors && appState.arch) {
-            if (appState.arch.arm64Enabled) {
-                setWorkspace('asm-arm64');
+
+            // Cambiar a vista de ensamblador activo
+            if (appState.arch) {
+                if (appState.arch.arm64Enabled) {
+                    setWorkspace('asm-arm64');
+                } else {
+                    setWorkspace('asm-x86');
+                }
             } else {
-                setWorkspace('asm-x86');
+                setWorkspace('optimizado');
             }
-        } else {
-            setWorkspace('optimizado');
+
+            // Iniciar ejecución interactiva del programa
+            const terminal = document.getElementById('terminal');
+            if (terminal) {
+                terminal.innerHTML = `<span class="text-green-400">✓ Compilación exitosa</span>\n`;
+            }
+            appState.consoleOut = `<span class="text-green-400">✓ Compilación exitosa</span>\n`;
+            saveState();
+
+            // Ejecutar el programa via WebSocket
+            startInteractiveExecution();
         }
 
     } catch (err) {

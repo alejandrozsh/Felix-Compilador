@@ -3,12 +3,29 @@ Codigo sin optimizar
 ==================================================
 No.    Operador     Argumento 1    Argumento 2    Resultado   
 --------------------------------------------------
-0      =            500.0          -              tarifaBase  
-1      =            tarifaBase     -              tarifaCliente
-2      =            tarifaCliente  -              cobroFinal  
-3      *            cobroFinal     0.16           t1          
-4      =            t1             -              impuesto    
-5      WRITE        "El impuesto a pagar es:" -              -           
-6      WRITE        impuesto       -              -           
+0      NEWMAT       m              2x2            -           
+1      WRITE        "Ingrese los valores para la matriz 2x2:" -              -           
+2      WRITE        "m[0][0]:"     -              -           
+3      MATREAD      0,0            -              m           
+4      WRITE        "m[0][1]:"     -              -           
+5      MATREAD      0,1            -              m           
+6      WRITE        "m[1][0]:"     -              -           
+7      MATREAD      1,0            -              m           
+8      WRITE        "m[1][1]:"     -              -           
+9      MATREAD      1,1            -              m           
+10     MATGET       m              0,0            t1          
+11     MATGET       m              0,1            t2          
+12     +            t1             t2             t3          
+13     MATGET       m              1,0            t4          
+14     +            t3             t4             t5          
+15     MATGET       m              1,1            t6          
+16     +            t5             t6             t7          
+17     =            t7             -              suma        
+18     WRITE        "La suma de todos los elementos es:" -              -           
+19     WRITE        suma           -              -           
+20     /            suma           4              t1          
+21     =            t1             -              promedio    
+22     WRITE        "El promedio es:" -              -           
+23     WRITE        promedio       -              -           
 --------------------------------------------------
-Total de instrucciones: 7
+Total de instrucciones: 24

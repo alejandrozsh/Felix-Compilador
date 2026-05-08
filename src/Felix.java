@@ -540,13 +540,9 @@ class CodeGeneratorWalker {
                         "Operacion aritmetica '" + op + "' con tipo no numerico '" + right.type + "'.",
                         "Tipo INTEGER o REAL.",
                         "Use solo valores numericos en operaciones aritmeticas."));
-                } else if (isNumeric(left.type) && isNumeric(right.type)) {
-                    if (!left.type.equals(right.type)) {
-                        errors.add(new SemanticError(line, col,
-                            "Mezcla de tipos '" + left.type + "' y '" + right.type + "' en operacion aritmetica.",
-                            "Ambos operandos del mismo tipo numerico.",
-                            "Asegurese de que ambos operandos sean INTEGER o ambos REAL."));
-                    }
+                }
+                // Promoción implícita: si hay mezcla INTEGER/REAL, el resultado es REAL
+                if (isNumeric(left.type) && isNumeric(right.type)) {
                     resultType = (left.type.equals("REAL") || right.type.equals("REAL")) ? "REAL" : "INTEGER";
                 }
             } else if (op.equalsIgnoreCase("AND") || op.equalsIgnoreCase("OR")) {
@@ -848,17 +844,21 @@ public class Felix implements FelixConstants {
                 traducirExpectedTokens(e)
             );
         }
-        Token t = token;
-        while (t.kind != SEMICOLON && t.kind != EOF) {
-            if (t.next != null && (
-                t.next.kind == SET   || t.next.kind == WRITE  || t.next.kind == READ ||
-                t.next.kind == IF    || t.next.kind == WHILE  || t.next.kind == FOR  ||
-                t.next.kind == SWITCH || t.next.kind == NEW   ||
-                t.next.kind == ELSE  || t.next.kind == ENDIF  || t.next.kind == ENDWHILE ||
-                t.next.kind == ENDFOR || t.next.kind == ENDSWITCH)) {
+        // Avanzar al menos un token para evitar loops infinitos en la recuperación
+        Token ahead = getToken(1);
+        while (ahead.kind != SEMICOLON && ahead.kind != EOF) {
+            if (ahead.kind == SET   || ahead.kind == WRITE  || ahead.kind == READ ||
+                ahead.kind == IF    || ahead.kind == WHILE  || ahead.kind == FOR  ||
+                ahead.kind == SWITCH || ahead.kind == NEW   ||
+                ahead.kind == ELSE  || ahead.kind == ENDIF  || ahead.kind == ENDWHILE ||
+                ahead.kind == ENDFOR || ahead.kind == ENDSWITCH) {
                 break;
             }
-            t = getNextToken();
+            getNextToken();
+            ahead = getToken(1);
+        }
+        if (ahead.kind == SEMICOLON) {
+            getNextToken(); // consumir el ';'
         }
     }
   }
@@ -905,7 +905,7 @@ public class Felix implements FelixConstants {
   }
 
   final public void Asignacion() throws ParseException {
-                      Token id; ExprNode tree; int line, col; int errorCountBefore; boolean declaredHere = false;
+                      Token id; ExprNode tree; int line, col; int errorCountBefore; boolean declaredHere = false; ExprNode rowExpr = null, colExpr = null;
     jj_consume_token(SET);
     id = jj_consume_token(IDENTIFIER);
         line = id.beginLine; col = id.beginColumn;
@@ -914,30 +914,60 @@ public class Felix implements FelixConstants {
             symbolTable.addVariable(id.image, "UNKNOWN");
             declaredHere = true;
         }
+    switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
+    case LBRACKET:
+      jj_consume_token(LBRACKET);
+      Expression();
+                                  rowExpr = semanticStack.pop();
+      jj_consume_token(RBRACKET);
+      jj_consume_token(LBRACKET);
+      Expression();
+                                  colExpr = semanticStack.pop();
+      jj_consume_token(RBRACKET);
+      break;
+    default:
+      jj_la1[1] = jj_gen;
+      ;
+    }
     expectTo();
     Expression();
     expectSemicolon();
         tree = semanticStack.pop();
         ExpressionResult res = walker().walk(tree, line, col);
         int errorCountAfter = syntaxErrors.size() + lexicErrors.size();
-        String varType = res.type;
-        if (errorCountAfter > errorCountBefore) {
-            varType = "UNKNOWN";
-        }
 
         Symbol existing = symbolTable.lookup(id.image);
-        if (declaredHere) {
-            existing.type = varType;
-        } else {
-            if (!existing.type.equals(varType) && !varType.equals("UNKNOWN") && !existing.type.equals("UNKNOWN")) {
+
+        if (rowExpr != null && colExpr != null) {
+            // Asignación a matriz
+            if (existing != null && !existing.type.equals("MATRIX")) {
                 semanticErrors.add(new SemanticError(line, col,
-                    "Asignacion incompatible: variable '" + id.image + "' es de tipo '" + existing.type +
-                    "' pero se intenta asignar tipo '" + varType + "'.",
-                    "Tipo " + existing.type + ".",
-                    "Asigne un valor de tipo " + existing.type + " a la variable."));
+                    "'" + id.image + "' no es una matriz.",
+                    "Una variable de tipo MATRIX.",
+                    "Use una variable declarada como matriz."));
             }
+            ExpressionResult r = walker().walk(rowExpr, line, col);
+            ExpressionResult c = walker().walk(colExpr, line, col);
+            intermediateCode.add(new IntermediateInstruction("MATSET", r.operand + "," + c.operand, res.operand, id.image));
+        } else {
+            // Asignación simple
+            String varType = res.type;
+            if (errorCountAfter > errorCountBefore) {
+                varType = "UNKNOWN";
+            }
+            if (declaredHere) {
+                existing.type = varType;
+            } else {
+                if (!existing.type.equals(varType) && !varType.equals("UNKNOWN") && !existing.type.equals("UNKNOWN")) {
+                    semanticErrors.add(new SemanticError(line, col,
+                        "Asignacion incompatible: variable '" + id.image + "' es de tipo '" + existing.type +
+                        "' pero se intenta asignar tipo '" + varType + "'.",
+                        "Tipo " + existing.type + ".",
+                        "Asigne un valor de tipo " + existing.type + " a la variable."));
+                }
+            }
+            intermediateCode.add(new IntermediateInstruction("=", res.operand, null, id.image));
         }
-        intermediateCode.add(new IntermediateInstruction("=", res.operand, null, id.image));
   }
 
   final public void EscribirTexto() throws ParseException {
@@ -976,14 +1006,38 @@ public class Felix implements FelixConstants {
   }
 
   final public void LeerVariable() throws ParseException {
-                        Token id;
+                        Token id; ExprNode rowExpr = null, colExpr = null;
     jj_consume_token(READ);
     id = jj_consume_token(IDENTIFIER);
+    switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
+    case LBRACKET:
+      jj_consume_token(LBRACKET);
+      Expression();
+                                  rowExpr = semanticStack.pop();
+      jj_consume_token(RBRACKET);
+      jj_consume_token(LBRACKET);
+      Expression();
+                                  colExpr = semanticStack.pop();
+      jj_consume_token(RBRACKET);
+      break;
+    default:
+      jj_la1[2] = jj_gen;
+      ;
+    }
     expectSemicolon();
         if (!symbolTable.isDeclared(id.image)) {
             symbolTable.addVariable(id.image, "UNKNOWN");
         }
-        intermediateCode.add(new IntermediateInstruction("READ", null, null, id.image));
+
+        if (rowExpr != null && colExpr != null) {
+            ExpressionResult r = walker().walk(rowExpr, id.beginLine, id.beginColumn);
+            ExpressionResult c = walker().walk(colExpr, id.beginLine, id.beginColumn);
+            // Reutilizamos MATSET pero el valor vendrá del input (especial en el intérprete)
+            // Sin embargo, para READ a matriz, lo más limpio es un nuevo cuádruple MATREAD
+            intermediateCode.add(new IntermediateInstruction("MATREAD", r.operand + "," + c.operand, null, id.image));
+        } else {
+            intermediateCode.add(new IntermediateInstruction("READ", null, null, id.image));
+        }
   }
 
 // ============================================================
@@ -1008,7 +1062,7 @@ public class Felix implements FelixConstants {
         ;
         break;
       default:
-        jj_la1[1] = jj_gen;
+        jj_la1[3] = jj_gen;
         break label_1;
       }
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
@@ -1043,7 +1097,7 @@ public class Felix implements FelixConstants {
         op = jj_consume_token(OR);
         break;
       default:
-        jj_la1[2] = jj_gen;
+        jj_la1[4] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
@@ -1064,7 +1118,7 @@ public class Felix implements FelixConstants {
         ;
         break;
       default:
-        jj_la1[3] = jj_gen;
+        jj_la1[5] = jj_gen;
         break label_2;
       }
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
@@ -1075,7 +1129,7 @@ public class Felix implements FelixConstants {
         op = jj_consume_token(DIV);
         break;
       default:
-        jj_la1[4] = jj_gen;
+        jj_la1[6] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
@@ -1121,7 +1175,7 @@ public class Felix implements FelixConstants {
         semanticStack.push(new UnaryOpNode("NEG", negOperand));
       break;
     default:
-      jj_la1[5] = jj_gen;
+      jj_la1[7] = jj_gen;
       if (jj_2_1(2)) {
         t = jj_consume_token(IDENTIFIER);
         jj_consume_token(LBRACKET);
@@ -1144,7 +1198,7 @@ public class Felix implements FelixConstants {
           jj_consume_token(RPAREN);
           break;
         default:
-          jj_la1[6] = jj_gen;
+          jj_la1[8] = jj_gen;
           jj_consume_token(-1);
           throw new ParseException();
         }
@@ -1187,7 +1241,7 @@ public class Felix implements FelixConstants {
         ;
         break;
       default:
-        jj_la1[7] = jj_gen;
+        jj_la1[9] = jj_gen;
         break label_3;
       }
       SafeStatement();
@@ -1211,7 +1265,7 @@ public class Felix implements FelixConstants {
           ;
           break;
         default:
-          jj_la1[8] = jj_gen;
+          jj_la1[10] = jj_gen;
           break label_4;
         }
         SafeStatement();
@@ -1219,7 +1273,7 @@ public class Felix implements FelixConstants {
         intermediateCode.add(new IntermediateInstruction("LABEL", null, null, lEnd));
       break;
     default:
-      jj_la1[9] = jj_gen;
+      jj_la1[11] = jj_gen;
       ;
     }
     expectEndIf();
@@ -1260,7 +1314,7 @@ public class Felix implements FelixConstants {
         ;
         break;
       default:
-        jj_la1[10] = jj_gen;
+        jj_la1[12] = jj_gen;
         break label_5;
       }
       SafeStatement();
@@ -1302,7 +1356,7 @@ public class Felix implements FelixConstants {
         ;
         break;
       default:
-        jj_la1[11] = jj_gen;
+        jj_la1[13] = jj_gen;
         break label_6;
       }
       SafeStatement();
@@ -1333,7 +1387,7 @@ public class Felix implements FelixConstants {
         ;
         break;
       default:
-        jj_la1[12] = jj_gen;
+        jj_la1[14] = jj_gen;
         break label_7;
       }
       jj_consume_token(CASE);
@@ -1359,7 +1413,7 @@ public class Felix implements FelixConstants {
           ;
           break;
         default:
-          jj_la1[13] = jj_gen;
+          jj_la1[15] = jj_gen;
           break label_8;
         }
         SafeStatement();
@@ -1385,14 +1439,14 @@ public class Felix implements FelixConstants {
           ;
           break;
         default:
-          jj_la1[14] = jj_gen;
+          jj_la1[16] = jj_gen;
           break label_9;
         }
         SafeStatement();
       }
       break;
     default:
-      jj_la1[15] = jj_gen;
+      jj_la1[17] = jj_gen;
       ;
     }
     jj_consume_token(ENDSWITCH);
@@ -1426,7 +1480,7 @@ public class Felix implements FelixConstants {
   private boolean jj_lookingAhead = false;
   private boolean jj_semLA;
   private int jj_gen;
-  final private int[] jj_la1 = new int[16];
+  final private int[] jj_la1 = new int[18];
   static private int[] jj_la1_0;
   static private int[] jj_la1_1;
   static {
@@ -1434,10 +1488,10 @@ public class Felix implements FelixConstants {
       jj_la1_init_1();
    }
    private static void jj_la1_init_0() {
-      jj_la1_0 = new int[] {0x29023a0,0xc0018000,0xc0018000,0x0,0x0,0x800e0000,0x0,0x29023a0,0x29023a0,0x800,0x29023a0,0x29023a0,0x4000000,0x29023a0,0x29023a0,0x8000000,};
+      jj_la1_0 = new int[] {0x5204740,0x0,0x0,0x80030000,0x80030000,0x0,0x0,0x1c0000,0x0,0x5204740,0x5204740,0x1000,0x5204740,0x5204740,0x8000000,0x5204740,0x5204740,0x10000000,};
    }
    private static void jj_la1_init_1() {
-      jj_la1_1 = new int[] {0x0,0xfc0,0xfc0,0x3,0x3,0x16000,0x8004,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,};
+      jj_la1_1 = new int[] {0x0,0x20,0x20,0x1f81,0x1f81,0x6,0x6,0x2c001,0x10008,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,};
    }
   final private JJCalls[] jj_2_rtns = new JJCalls[1];
   private boolean jj_rescan = false;
@@ -1454,7 +1508,7 @@ public class Felix implements FelixConstants {
     token = new Token();
     jj_ntk = -1;
     jj_gen = 0;
-    for (int i = 0; i < 16; i++) jj_la1[i] = -1;
+    for (int i = 0; i < 18; i++) jj_la1[i] = -1;
     for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -1469,7 +1523,7 @@ public class Felix implements FelixConstants {
     token = new Token();
     jj_ntk = -1;
     jj_gen = 0;
-    for (int i = 0; i < 16; i++) jj_la1[i] = -1;
+    for (int i = 0; i < 18; i++) jj_la1[i] = -1;
     for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -1480,7 +1534,7 @@ public class Felix implements FelixConstants {
     token = new Token();
     jj_ntk = -1;
     jj_gen = 0;
-    for (int i = 0; i < 16; i++) jj_la1[i] = -1;
+    for (int i = 0; i < 18; i++) jj_la1[i] = -1;
     for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -1491,7 +1545,7 @@ public class Felix implements FelixConstants {
     token = new Token();
     jj_ntk = -1;
     jj_gen = 0;
-    for (int i = 0; i < 16; i++) jj_la1[i] = -1;
+    for (int i = 0; i < 18; i++) jj_la1[i] = -1;
     for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -1501,7 +1555,7 @@ public class Felix implements FelixConstants {
     token = new Token();
     jj_ntk = -1;
     jj_gen = 0;
-    for (int i = 0; i < 16; i++) jj_la1[i] = -1;
+    for (int i = 0; i < 18; i++) jj_la1[i] = -1;
     for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -1511,7 +1565,7 @@ public class Felix implements FelixConstants {
     token = new Token();
     jj_ntk = -1;
     jj_gen = 0;
-    for (int i = 0; i < 16; i++) jj_la1[i] = -1;
+    for (int i = 0; i < 18; i++) jj_la1[i] = -1;
     for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -1626,12 +1680,12 @@ public class Felix implements FelixConstants {
   /** Generate ParseException. */
   public ParseException generateParseException() {
     jj_expentries.clear();
-    boolean[] la1tokens = new boolean[50];
+    boolean[] la1tokens = new boolean[51];
     if (jj_kind >= 0) {
       la1tokens[jj_kind] = true;
       jj_kind = -1;
     }
-    for (int i = 0; i < 16; i++) {
+    for (int i = 0; i < 18; i++) {
       if (jj_la1[i] == jj_gen) {
         for (int j = 0; j < 32; j++) {
           if ((jj_la1_0[i] & (1<<j)) != 0) {
@@ -1643,7 +1697,7 @@ public class Felix implements FelixConstants {
         }
       }
     }
-    for (int i = 0; i < 50; i++) {
+    for (int i = 0; i < 51; i++) {
       if (la1tokens[i]) {
         jj_expentry = new int[1];
         jj_expentry[0] = i;

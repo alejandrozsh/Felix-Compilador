@@ -546,13 +546,9 @@ class CodeGeneratorWalker {
                         "Operacion aritmetica '" + op + "' con tipo no numerico '" + right.type + "'.",
                         "Tipo INTEGER o REAL.",
                         "Use solo valores numericos en operaciones aritmeticas."));
-                } else if (isNumeric(left.type) && isNumeric(right.type)) {
-                    if (!left.type.equals(right.type)) {
-                        errors.add(new SemanticError(line, col,
-                            "Mezcla de tipos '" + left.type + "' y '" + right.type + "' en operacion aritmetica.",
-                            "Ambos operandos del mismo tipo numerico.",
-                            "Asegurese de que ambos operandos sean INTEGER o ambos REAL."));
-                    }
+                }
+                // Promoción implícita: si hay mezcla INTEGER/REAL, el resultado es REAL
+                if (isNumeric(left.type) && isNumeric(right.type)) {
                     resultType = (left.type.equals("REAL") || right.type.equals("REAL")) ? "REAL" : "INTEGER";
                 }
             } else if (op.equalsIgnoreCase("AND") || op.equalsIgnoreCase("OR")) {
@@ -800,6 +796,7 @@ TOKEN_MGR_DECLS : {
 }
 
 SKIP : { " " | "\t" | "\n" | "\r" }
+SPECIAL_TOKEN : { < SINGLE_LINE_COMMENT: "//" (~["\n","\r"])* ("\n"|"\r"|"\r\n")? > }
 
 TOKEN : {
     < SET:          "SET"          > |
@@ -940,17 +937,21 @@ void SafeStatement() : {} {
                 traducirExpectedTokens(e)
             );
         }
-        Token t = token;
-        while (t.kind != SEMICOLON && t.kind != EOF) {
-            if (t.next != null && (
-                t.next.kind == SET   || t.next.kind == WRITE  || t.next.kind == READ ||
-                t.next.kind == IF    || t.next.kind == WHILE  || t.next.kind == FOR  ||
-                t.next.kind == SWITCH || t.next.kind == NEW   ||
-                t.next.kind == ELSE  || t.next.kind == ENDIF  || t.next.kind == ENDWHILE ||
-                t.next.kind == ENDFOR || t.next.kind == ENDSWITCH)) {
+        // Avanzar al menos un token para evitar loops infinitos en la recuperación
+        Token ahead = getToken(1);
+        while (ahead.kind != SEMICOLON && ahead.kind != EOF) {
+            if (ahead.kind == SET   || ahead.kind == WRITE  || ahead.kind == READ ||
+                ahead.kind == IF    || ahead.kind == WHILE  || ahead.kind == FOR  ||
+                ahead.kind == SWITCH || ahead.kind == NEW   ||
+                ahead.kind == ELSE  || ahead.kind == ENDIF  || ahead.kind == ENDWHILE ||
+                ahead.kind == ENDFOR || ahead.kind == ENDSWITCH) {
                 break;
             }
-            t = getNextToken();
+            getNextToken();
+            ahead = getToken(1);
+        }
+        if (ahead.kind == SEMICOLON) {
+            getNextToken(); // consumir el ';'
         }
     }
 }
@@ -969,7 +970,7 @@ void Statement() : {} {
     | DeclararMatriz() | WhileStatement() | ForStatement() | SwitchStatement() )
 }
 
-void Asignacion() : { Token id; ExprNode tree; int line, col; int errorCountBefore; boolean declaredHere = false; } {
+void Asignacion() : { Token id; ExprNode tree; int line, col; int errorCountBefore; boolean declaredHere = false; ExprNode rowExpr = null, colExpr = null; } {
     <SET> id=<IDENTIFIER> { 
         line = id.beginLine; col = id.beginColumn; 
         errorCountBefore = syntaxErrors.size() + lexicErrors.size();
@@ -978,28 +979,47 @@ void Asignacion() : { Token id; ExprNode tree; int line, col; int errorCountBefo
             declaredHere = true;
         }
     }
+    (
+        <LBRACKET> Expression() { rowExpr = semanticStack.pop(); } <RBRACKET>
+        <LBRACKET> Expression() { colExpr = semanticStack.pop(); } <RBRACKET>
+    )?
     expectTo() Expression() expectSemicolon() {
         tree = semanticStack.pop();
         ExpressionResult res = walker().walk(tree, line, col);
         int errorCountAfter = syntaxErrors.size() + lexicErrors.size();
-        String varType = res.type;
-        if (errorCountAfter > errorCountBefore) {
-            varType = "UNKNOWN";
-        }
         
         Symbol existing = symbolTable.lookup(id.image);
-        if (declaredHere) {
-            existing.type = varType;
-        } else {
-            if (!existing.type.equals(varType) && !varType.equals("UNKNOWN") && !existing.type.equals("UNKNOWN")) {
+        
+        if (rowExpr != null && colExpr != null) {
+            // Asignación a matriz
+            if (existing != null && !existing.type.equals("MATRIX")) {
                 semanticErrors.add(new SemanticError(line, col,
-                    "Asignacion incompatible: variable '" + id.image + "' es de tipo '" + existing.type +
-                    "' pero se intenta asignar tipo '" + varType + "'.",
-                    "Tipo " + existing.type + ".",
-                    "Asigne un valor de tipo " + existing.type + " a la variable."));
+                    "'" + id.image + "' no es una matriz.",
+                    "Una variable de tipo MATRIX.",
+                    "Use una variable declarada como matriz."));
             }
+            ExpressionResult r = walker().walk(rowExpr, line, col);
+            ExpressionResult c = walker().walk(colExpr, line, col);
+            intermediateCode.add(new IntermediateInstruction("MATSET", r.operand + "," + c.operand, res.operand, id.image));
+        } else {
+            // Asignación simple
+            String varType = res.type;
+            if (errorCountAfter > errorCountBefore) {
+                varType = "UNKNOWN";
+            }
+            if (declaredHere) {
+                existing.type = varType;
+            } else {
+                if (!existing.type.equals(varType) && !varType.equals("UNKNOWN") && !existing.type.equals("UNKNOWN")) {
+                    semanticErrors.add(new SemanticError(line, col,
+                        "Asignacion incompatible: variable '" + id.image + "' es de tipo '" + existing.type +
+                        "' pero se intenta asignar tipo '" + varType + "'.",
+                        "Tipo " + existing.type + ".",
+                        "Asigne un valor de tipo " + existing.type + " a la variable."));
+                }
+            }
+            intermediateCode.add(new IntermediateInstruction("=", res.operand, null, id.image));
         }
-        intermediateCode.add(new IntermediateInstruction("=", res.operand, null, id.image));
     }
 }
 
@@ -1028,12 +1048,26 @@ void DeclararMatriz() : { Token id, d1, d2; } {
     }
 }
 
-void LeerVariable() : { Token id; } {
-    <READ> id=<IDENTIFIER> expectSemicolon() {
+void LeerVariable() : { Token id; ExprNode rowExpr = null, colExpr = null; } {
+    <READ> id=<IDENTIFIER> 
+    (
+        <LBRACKET> Expression() { rowExpr = semanticStack.pop(); } <RBRACKET>
+        <LBRACKET> Expression() { colExpr = semanticStack.pop(); } <RBRACKET>
+    )?
+    expectSemicolon() {
         if (!symbolTable.isDeclared(id.image)) {
             symbolTable.addVariable(id.image, "UNKNOWN");
         }
-        intermediateCode.add(new IntermediateInstruction("READ", null, null, id.image));
+        
+        if (rowExpr != null && colExpr != null) {
+            ExpressionResult r = walker().walk(rowExpr, id.beginLine, id.beginColumn);
+            ExpressionResult c = walker().walk(colExpr, id.beginLine, id.beginColumn);
+            // Reutilizamos MATSET pero el valor vendrá del input (especial en el intérprete)
+            // Sin embargo, para READ a matriz, lo más limpio es un nuevo cuádruple MATREAD
+            intermediateCode.add(new IntermediateInstruction("MATREAD", r.operand + "," + c.operand, null, id.image));
+        } else {
+            intermediateCode.add(new IntermediateInstruction("READ", null, null, id.image));
+        }
     }
 }
 

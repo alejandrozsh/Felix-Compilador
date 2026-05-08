@@ -211,3 +211,46 @@ body.resizing * {
 ::-webkit-scrollbar-thumb:hover {
     background: #555;
 }
+
+/* ==========================================
+   TERMINAL INTERACTIVA (READ)
+   ========================================== */
+.terminal-input-line {
+    display: flex;
+    align-items: center;
+    margin-top: 4px;
+    animation: fadeInUp 0.2s ease-out;
+}
+
+.terminal-input-line .read-prompt {
+    color: #22c55e;
+    font-weight: bold;
+    white-space: nowrap;
+    margin-right: 4px;
+}
+
+.terminal-input-line input {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #67e8f9;
+    font-family: inherit;
+    font-size: inherit;
+    flex: 1;
+    caret-color: #67e8f9;
+    padding: 0;
+}
+
+.terminal-input-line input::placeholder {
+    color: #4a5568;
+    font-style: italic;
+}
+
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.terminal-read-value {
+    color: #67e8f9;
+}

@@ -3,9 +3,10 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const http = require('http');
-const { exec, execSync } = require('child_process');
+const { exec, execSync, spawn } = require('child_process');
 const path = require('path');
 const os = require('os');
+const { Server } = require('socket.io');
 
 const app = express();
 
@@ -63,7 +64,7 @@ app.get('/api/arch', (req, res) => {
 });
 
 // ==========================================
-// ENDPOINT: COMPILACIÓN COMPLETA
+// ENDPOINT: COMPILACIÓN COMPLETA (sin ejecución)
 // ==========================================
 app.post('/api/compile', (req, res) => {
     const { code } = req.body;
@@ -102,10 +103,9 @@ app.post('/api/compile', (req, res) => {
         // Paso 2: Si no hay errores y existen cuádruples optimizados, generar ensamblador
         let asmARM64 = "";
         let asmX86 = "";
-        let programOutput = "";
 
         if (!hasErrors && fs.existsSync(optFile)) {
-            // 2a: Generar ensamblador
+            // Generar ensamblador
             try {
                 execSync(`java ${javaOpts} AssemblyTranslator entrada_web_cuadruples_opt.txt`, { 
                     cwd: COMPILER_DIR, 
@@ -121,18 +121,15 @@ app.post('/api/compile', (req, res) => {
             } catch (asmError) {
                 console.error("Error en traducción a ensamblador:", asmError.message);
             }
+        }
 
-            // 2b: Interpretar cuádruples para obtener la salida del programa
-            try {
-                programOutput = execSync(`java ${javaOpts} QuadInterpreter entrada_web_cuadruples_opt.txt`, {
-                    cwd: COMPILER_DIR,
-                    encoding: 'utf8',
-                    stdio: 'pipe'
-                });
-            } catch (interpError) {
-                console.error("Error en intérprete:", interpError.message);
-                programOutput = "[Error al interpretar el programa]";
-            }
+        // Detectar si hay cuádruples READ en el archivo optimizado
+        let hasReadInstructions = false;
+        if (!hasErrors && quadsOpt) {
+            hasReadInstructions = quadsOpt.split('\n').some(line => {
+                const parts = line.trim().split(/\s+/);
+                return parts.length >= 2 && parts[1] === 'READ';
+            });
         }
 
         res.json({
@@ -142,7 +139,7 @@ app.post('/api/compile', (req, res) => {
             quadsOpt: quadsOpt,
             asmARM64: asmARM64,
             asmX86: asmX86,
-            programOutput: programOutput
+            hasReadInstructions: hasReadInstructions
         });
     });
 });
@@ -157,8 +154,121 @@ app.get('/api/file/:name', (req, res) => {
     }
 });
 
-// Usar http.createServer en lugar de app.listen para compatibilidad con Express 5
+// ==========================================
+// SERVIDOR HTTP + SOCKET.IO
+// ==========================================
 const server = http.createServer(app);
+const io = new Server(server, {
+    cors: { origin: '*' }
+});
+
+// ==========================================
+// WEBSOCKET: EJECUCIÓN INTERACTIVA
+// ==========================================
+io.on('connection', (socket) => {
+    let childProcess = null;
+
+    socket.on('execute', (data) => {
+        // Matar proceso anterior si existe
+        if (childProcess) {
+            try { childProcess.kill(); } catch(e) {}
+            childProcess = null;
+        }
+
+        const optFile = path.join(COMPILER_DIR, 'entrada_web_cuadruples_opt.txt');
+        
+        if (!fs.existsSync(optFile)) {
+            socket.emit('execution_error', { message: 'No se encontró el archivo de cuádruples optimizados.' });
+            return;
+        }
+
+        // Spawn del intérprete de cuádruples como proceso hijo
+        childProcess = spawn('java', ['-Dfile.encoding=UTF-8', 'QuadInterpreter', 'entrada_web_cuadruples_opt.txt'], {
+            cwd: COMPILER_DIR,
+            stdio: ['pipe', 'pipe', 'pipe']
+        });
+
+        // Timeout de 30 segundos para evitar procesos colgados
+        const executionTimeout = setTimeout(() => {
+            if (childProcess) {
+                socket.emit('execution_error', { message: 'Tiempo de ejecución agotado (30s). El proceso fue terminado.' });
+                try { childProcess.kill(); } catch(e) {}
+                childProcess = null;
+            }
+        }, 30000);
+
+        let buffer = '';
+
+        // Procesar stdout línea por línea
+        childProcess.stdout.on('data', (chunk) => {
+            buffer += chunk.toString();
+            const lines = buffer.split('\n');
+            // Mantener la última línea incompleta en el buffer
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed) continue;
+
+                if (trimmed.startsWith('__READ__:')) {
+                    const varName = trimmed.substring(9);
+                    socket.emit('read_request', { variable: varName });
+                } else if (trimmed.startsWith('__WRITE__:')) {
+                    const value = trimmed.substring(10);
+                    socket.emit('program_output', { value: value });
+                } else if (trimmed === '__DONE__') {
+                    socket.emit('execution_done');
+                }
+            }
+        });
+
+        // Errores del proceso
+        childProcess.stderr.on('data', (chunk) => {
+            const msg = chunk.toString().trim();
+            if (msg) {
+                socket.emit('execution_error', { message: msg });
+            }
+        });
+
+        // Proceso terminó
+        childProcess.on('close', (code) => {
+            clearTimeout(executionTimeout);
+            // Procesar lo que quede en el buffer
+            if (buffer.trim()) {
+                const trimmed = buffer.trim();
+                if (trimmed.startsWith('__WRITE__:')) {
+                    socket.emit('program_output', { value: trimmed.substring(10) });
+                } else if (trimmed === '__DONE__') {
+                    socket.emit('execution_done');
+                }
+            }
+            socket.emit('execution_done');
+            childProcess = null;
+        });
+
+        childProcess.on('error', (err) => {
+            clearTimeout(executionTimeout);
+            socket.emit('execution_error', { message: 'Error al iniciar el intérprete: ' + err.message });
+            childProcess = null;
+        });
+    });
+
+    // Recibir respuesta del usuario para READ
+    socket.on('read_response', (data) => {
+        if (childProcess && childProcess.stdin && !childProcess.stdin.destroyed) {
+            childProcess.stdin.write(data.value + '\n');
+        }
+    });
+
+    // Limpieza al desconectar
+    socket.on('disconnect', () => {
+        if (childProcess) {
+            childProcess.kill();
+            childProcess = null;
+        }
+    });
+});
+
 server.listen(3001, () => {
     console.log('Backend corriendo en http://localhost:3001');
 });

@@ -29,7 +29,7 @@ public class QuadInterpreter {
     private List<Quad> quads = new ArrayList<Quad>();
     private Map<String, Object> memory = new LinkedHashMap<String, Object>();
     private Map<String, Integer> labelIndex = new LinkedHashMap<String, Integer>();
-    private StringBuilder output = new StringBuilder();
+    private Scanner scanner = new Scanner(System.in);
 
     // ============================================================
     // Parsear el archivo de cuádruples
@@ -156,10 +156,26 @@ public class QuadInterpreter {
         return 0.0;
     }
 
+    // Convierte a número para operaciones aritméticas, emitiendo error de tipo si no es numérico
+    private double toArithmetic(Object val) {
+        if (val == null) return 0.0;
+        if (val instanceof Double) return (Double) val;
+        if (val instanceof String) {
+            String s = (String) val;
+            try { return Double.parseDouble(s); }
+            catch (NumberFormatException e) {
+                System.out.println("__WRITE__:[Error de tipo: '" + s + "' no es un valor numerico]");
+                System.out.flush();
+                return 0.0;
+            }
+        }
+        return 0.0;
+    }
+
     // ============================================================
     // Ejecutar el programa
     // ============================================================
-    public String execute() {
+    public void execute() {
         int pc = 0; // Program Counter
         int maxSteps = 100000; // Protección contra loops infinitos
         int steps = 0;
@@ -175,40 +191,33 @@ public class QuadInterpreter {
                     pc++;
                     break;
 
-                // --- Aritmética ---
-                case "+": {
-                    Object a = resolve(q.arg1);
-                    Object b = resolve(q.arg2);
-                    // Concatenación si alguno es string
-                    if (a instanceof String || b instanceof String) {
-                        memory.put(q.result, formatValue(a) + formatValue(b));
-                    } else {
-                        memory.put(q.result, toDouble(a) + toDouble(b));
-                    }
+                // --- Aritmética (siempre numérica, con validación de tipos) ---
+                case "+":
+                    memory.put(q.result, toArithmetic(resolve(q.arg1)) + toArithmetic(resolve(q.arg2)));
                     pc++;
                     break;
-                }
                 case "-":
-                    memory.put(q.result, toDouble(resolve(q.arg1)) - toDouble(resolve(q.arg2)));
+                    memory.put(q.result, toArithmetic(resolve(q.arg1)) - toArithmetic(resolve(q.arg2)));
                     pc++;
                     break;
                 case "*":
-                    memory.put(q.result, toDouble(resolve(q.arg1)) * toDouble(resolve(q.arg2)));
+                    memory.put(q.result, toArithmetic(resolve(q.arg1)) * toArithmetic(resolve(q.arg2)));
                     pc++;
                     break;
                 case "/": {
-                    double divisor = toDouble(resolve(q.arg2));
+                    double divisor = toArithmetic(resolve(q.arg2));
                     if (divisor == 0) {
-                        output.append("[Error: División por cero]\n");
+                        System.out.println("__WRITE__:[Error: Division por cero]");
+                        System.out.flush();
                         memory.put(q.result, 0.0);
                     } else {
-                        memory.put(q.result, toDouble(resolve(q.arg1)) / divisor);
+                        memory.put(q.result, toArithmetic(resolve(q.arg1)) / divisor);
                     }
                     pc++;
                     break;
                 }
                 case "%":
-                    memory.put(q.result, toDouble(resolve(q.arg1)) % toDouble(resolve(q.arg2)));
+                    memory.put(q.result, toArithmetic(resolve(q.arg1)) % toArithmetic(resolve(q.arg2)));
                     pc++;
                     break;
 
@@ -261,16 +270,33 @@ public class QuadInterpreter {
                 // --- WRITE (salida del programa) ---
                 case "WRITE": {
                     Object val = resolve(q.arg1);
-                    output.append(formatValue(val)).append("\n");
+                    System.out.println("__WRITE__:" + formatValue(val));
+                    System.out.flush();
                     pc++;
                     break;
                 }
 
-                // --- READ (entrada — usa valor por defecto en web) ---
-                case "READ":
-                    memory.put(q.result, 0.0);
+                // --- READ (entrada interactiva) ---
+                case "READ": {
+                    System.out.println("__READ__:" + q.result);
+                    System.out.flush();
+                    String inputLine = "";
+                    if (scanner.hasNextLine()) {
+                        inputLine = scanner.nextLine().trim();
+                    }
+                    if (inputLine.isEmpty()) {
+                        memory.put(q.result, 0.0);
+                    } else {
+                        try {
+                            memory.put(q.result, Double.parseDouble(inputLine));
+                        } catch (NumberFormatException ex) {
+                            // Almacenar como string (inferencia de tipo)
+                            memory.put(q.result, inputLine);
+                        }
+                    }
                     pc++;
                     break;
+                }
 
                 // --- Control de flujo ---
                 case "LABEL":
@@ -296,7 +322,8 @@ public class QuadInterpreter {
                 // --- Matrices ---
                 case "NEWMAT":
                     // Crear una matriz en memoria (simplificada como mapa)
-                    memory.put(q.result, new LinkedHashMap<String, Object>());
+                    // arg1 = nombre de la matriz, arg2 = dimensiones (ej: "2x2")
+                    memory.put(q.arg1, new LinkedHashMap<String, Object>());
                     pc++;
                     break;
                 case "MATSET": {
@@ -321,6 +348,34 @@ public class QuadInterpreter {
                     break;
                 }
 
+                case "MATREAD": {
+                    // MATREAD nombre fila,col (resultado en terminal)
+                    System.out.println("__READ__:" + q.result + "[" + q.arg1 + "]");
+                    System.out.flush();
+                    String inputLine = "";
+                    if (scanner.hasNextLine()) {
+                        inputLine = scanner.nextLine().trim();
+                    }
+                    
+                    Object valToPut;
+                    if (inputLine.isEmpty()) {
+                        valToPut = 0.0;
+                    } else {
+                        try {
+                            valToPut = Double.parseDouble(inputLine);
+                        } catch (NumberFormatException ex) {
+                            valToPut = inputLine;
+                        }
+                    }
+
+                    Object mat = memory.get(q.result);
+                    if (mat instanceof Map) {
+                        ((Map<String, Object>) mat).put(q.arg1, valToPut);
+                    }
+                    pc++;
+                    break;
+                }
+
                 default:
                     // Operador desconocido — avanzar
                     pc++;
@@ -329,10 +384,12 @@ public class QuadInterpreter {
         }
 
         if (steps >= maxSteps) {
-            output.append("\n[Advertencia: Límite de ejecución alcanzado (posible loop infinito)]\n");
+            System.out.println("__WRITE__:[Advertencia: Limite de ejecucion alcanzado (posible loop infinito)]");
+            System.out.flush();
         }
 
-        return output.toString();
+        System.out.println("__DONE__");
+        System.out.flush();
     }
 
     // ============================================================
@@ -372,8 +429,7 @@ public class QuadInterpreter {
         try {
             QuadInterpreter interp = new QuadInterpreter();
             interp.loadFromFile(args[0]);
-            String result = interp.execute();
-            System.out.print(result);
+            interp.execute();
         } catch (Exception e) {
             System.err.println("Error en el intérprete: " + e.getMessage());
             System.exit(1);

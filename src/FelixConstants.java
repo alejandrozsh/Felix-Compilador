@@ -9,95 +9,97 @@ public interface FelixConstants {
   /** End of File. */
   int EOF = 0;
   /** RegularExpression Id. */
-  int SET = 5;
+  int SINGLE_LINE_COMMENT = 5;
   /** RegularExpression Id. */
-  int TO = 6;
+  int SET = 6;
   /** RegularExpression Id. */
-  int WRITE = 7;
+  int TO = 7;
   /** RegularExpression Id. */
-  int READ = 8;
+  int WRITE = 8;
   /** RegularExpression Id. */
-  int IF = 9;
+  int READ = 9;
   /** RegularExpression Id. */
-  int THEN = 10;
+  int IF = 10;
   /** RegularExpression Id. */
-  int ELSE = 11;
+  int THEN = 11;
   /** RegularExpression Id. */
-  int ENDIF = 12;
+  int ELSE = 12;
   /** RegularExpression Id. */
-  int NEW = 13;
+  int ENDIF = 13;
   /** RegularExpression Id. */
-  int MATRIX = 14;
+  int NEW = 14;
   /** RegularExpression Id. */
-  int AND = 15;
+  int MATRIX = 15;
   /** RegularExpression Id. */
-  int OR = 16;
+  int AND = 16;
   /** RegularExpression Id. */
-  int NOT = 17;
+  int OR = 17;
   /** RegularExpression Id. */
-  int TRUE = 18;
+  int NOT = 18;
   /** RegularExpression Id. */
-  int FALSE = 19;
+  int TRUE = 19;
   /** RegularExpression Id. */
-  int WHILE = 20;
+  int FALSE = 20;
   /** RegularExpression Id. */
-  int DO = 21;
+  int WHILE = 21;
   /** RegularExpression Id. */
-  int ENDWHILE = 22;
+  int DO = 22;
   /** RegularExpression Id. */
-  int FOR = 23;
+  int ENDWHILE = 23;
   /** RegularExpression Id. */
-  int ENDFOR = 24;
+  int FOR = 24;
   /** RegularExpression Id. */
-  int SWITCH = 25;
+  int ENDFOR = 25;
   /** RegularExpression Id. */
-  int CASE = 26;
+  int SWITCH = 26;
   /** RegularExpression Id. */
-  int DEFAULT_CASE = 27;
+  int CASE = 27;
   /** RegularExpression Id. */
-  int ENDSWITCH = 28;
+  int DEFAULT_CASE = 28;
   /** RegularExpression Id. */
-  int SEMICOLON = 29;
+  int ENDSWITCH = 29;
   /** RegularExpression Id. */
-  int PLUS = 30;
+  int SEMICOLON = 30;
   /** RegularExpression Id. */
-  int MINUS = 31;
+  int PLUS = 31;
   /** RegularExpression Id. */
-  int TIMES = 32;
+  int MINUS = 32;
   /** RegularExpression Id. */
-  int DIV = 33;
+  int TIMES = 33;
   /** RegularExpression Id. */
-  int LPAREN = 34;
+  int DIV = 34;
   /** RegularExpression Id. */
-  int RPAREN = 35;
+  int LPAREN = 35;
   /** RegularExpression Id. */
-  int LBRACKET = 36;
+  int RPAREN = 36;
   /** RegularExpression Id. */
-  int RBRACKET = 37;
+  int LBRACKET = 37;
   /** RegularExpression Id. */
-  int EQ = 38;
+  int RBRACKET = 38;
   /** RegularExpression Id. */
-  int NEQ = 39;
+  int EQ = 39;
   /** RegularExpression Id. */
-  int GE = 40;
+  int NEQ = 40;
   /** RegularExpression Id. */
-  int LE = 41;
+  int GE = 41;
   /** RegularExpression Id. */
-  int GT = 42;
+  int LE = 42;
   /** RegularExpression Id. */
-  int LT = 43;
+  int GT = 43;
   /** RegularExpression Id. */
-  int ASSIGN_OP = 44;
+  int LT = 44;
   /** RegularExpression Id. */
-  int REAL_LIT = 45;
+  int ASSIGN_OP = 45;
   /** RegularExpression Id. */
-  int INTEGER_LIT = 46;
+  int REAL_LIT = 46;
   /** RegularExpression Id. */
-  int IDENTIFIER = 47;
+  int INTEGER_LIT = 47;
   /** RegularExpression Id. */
-  int STRING_LITERAL = 48;
+  int IDENTIFIER = 48;
   /** RegularExpression Id. */
-  int ERROR = 49;
+  int STRING_LITERAL = 49;
+  /** RegularExpression Id. */
+  int ERROR = 50;
 
   /** Lexical state. */
   int DEFAULT = 0;
@@ -109,6 +111,7 @@ public interface FelixConstants {
     "\"\\t\"",
     "\"\\n\"",
     "\"\\r\"",
+    "<SINGLE_LINE_COMMENT>",
     "\"SET\"",
     "\"TO\"",
     "\"WRITE\"",
