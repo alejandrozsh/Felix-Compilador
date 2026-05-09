@@ -1,16 +1,20 @@
-NEW MATRIX m[2][2];
-WRITE "Ingrese los valores para la matriz 2x2:";
-WRITE "m[0][0]:";
-READ m[0][0];
-WRITE "m[0][1]:";
-READ m[0][1];
-WRITE "m[1][0]:";
-READ m[1][0];
-WRITE "m[1][1]:";
-READ m[1][1];
-SET suma TO m[0][0] + m[0][1] + m[1][0] + m[1][1];
-WRITE "La suma de todos los elementos es:";
-WRITE suma;
-SET promedio TO suma / 4;
-WRITE "El promedio es:";
-WRITE promedio;
+WRITE "Cantidad:";
+READ n;
+
+SET a TO 0;
+SET b TO 1;
+SET i TO 0;
+
+WHILE (i < n) DO
+
+    WRITE a;
+
+    SET temp TO a + b;
+
+    SET a TO b;
+
+    SET b TO temp;
+
+    SET i TO i + 1;
+
+ENDWHILE

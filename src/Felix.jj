@@ -201,28 +201,31 @@ class CommonSubexpressionElimination implements Optimizer {
 // ============================================================
 class CopyPropagation implements Optimizer {
     public List<IntermediateInstruction> optimize(List<IntermediateInstruction> code) {
-        Map<String, String> copyMap = new LinkedHashMap<String, String>();
-        for (IntermediateInstruction ins : code) {
-            if (ins.operator.equals("=") && ins.arg2 == null && ins.arg1 != null && ins.result != null) {
-                String resolvedSrc = OptimizerUtils.applyMap(ins.arg1, copyMap);
-                if (OptimizerUtils.isTemp(resolvedSrc) && !OptimizerUtils.isTemp(ins.result)) {
-                    copyMap.put(resolvedSrc, ins.result);
-                } else {
-                    copyMap.put(ins.result, resolvedSrc);
+        List<BasicBlock> blocks = OptimizerUtils.buildBlocks(code);
+        for (BasicBlock block : blocks) {
+            Map<String, String> copyMap = new LinkedHashMap<String, String>();
+            for (IntermediateInstruction ins : block.instructions) {
+                ins.arg1 = OptimizerUtils.applyMap(ins.arg1, copyMap);
+                ins.arg2 = OptimizerUtils.applyMap(ins.arg2, copyMap);
+
+                if (ins.operator.equals("=") && ins.arg2 == null && ins.arg1 != null && ins.result != null) {
+                    if (OptimizerUtils.isTemp(ins.arg1) && !OptimizerUtils.isTemp(ins.result)) {
+                        copyMap.put(ins.arg1, ins.result);
+                    } else {
+                        copyMap.put(ins.result, ins.arg1);
+                    }
+                } else if (ins.result != null) {
+                    List<String> toRemove = new ArrayList<String>();
+                    for (Map.Entry<String, String> entry : copyMap.entrySet()) {
+                        if (entry.getKey().equals(ins.result) || entry.getValue().equals(ins.result)) {
+                            toRemove.add(entry.getKey());
+                        }
+                    }
+                    for (String k : toRemove) copyMap.remove(k);
                 }
             }
         }
-
-        List<IntermediateInstruction> result = new ArrayList<IntermediateInstruction>();
-        for (IntermediateInstruction ins : code) {
-            result.add(new IntermediateInstruction(
-                ins.operator,
-                OptimizerUtils.applyMap(ins.arg1, copyMap),
-                OptimizerUtils.applyMap(ins.arg2, copyMap),
-                ins.result
-            ));
-        }
-        return result;
+        return OptimizerUtils.flatten(blocks);
     }
 }
 
@@ -938,6 +941,7 @@ void SafeStatement() : {} {
             );
         }
         // Avanzar al menos un token para evitar loops infinitos en la recuperación
+        boolean consumed = false;
         Token ahead = getToken(1);
         while (ahead.kind != SEMICOLON && ahead.kind != EOF) {
             if (ahead.kind == SET   || ahead.kind == WRITE  || ahead.kind == READ ||
@@ -948,10 +952,15 @@ void SafeStatement() : {} {
                 break;
             }
             getNextToken();
+            consumed = true;
             ahead = getToken(1);
         }
         if (ahead.kind == SEMICOLON) {
             getNextToken(); // consumir el ';'
+            consumed = true;
+        }
+        if (!consumed && ahead.kind != EOF) {
+            getNextToken(); // Fuerza consumir el token problemático para evitar loop infinito
         }
     }
 }
