@@ -1,0 +1,29 @@
+SET i TO 1;
+
+WHILE i <= 100
+{
+    IF i % 3 == 0 AND i % 5 == 0 THEN
+    {
+        WRITE "FizzBuzz";
+    }
+    ELSE
+    {
+        IF i % 3 == 0 THEN
+        {
+            WRITE "Fizz";
+        }
+        ELSE
+        {
+            IF i % 5 == 0 THEN
+            {
+                WRITE "Buzz";
+            }
+            ELSE
+            {
+                WRITE i;
+            }
+        }
+    }
+
+    SET i TO i + 1;
+}
