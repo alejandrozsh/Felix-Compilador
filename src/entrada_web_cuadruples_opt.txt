@@ -3,23 +3,18 @@ Codigo optimizado
 ==================================================
 No.    Operador     Argumento 1    Argumento 2    Resultado   
 --------------------------------------------------
-0      WRITE        "Cantidad:"    -              -           
-1      READ         -              -              n           
-2      =            0              -              a           
-3      =            1              -              b           
-4      =            0              -              i           
-5      LABEL        -              -              L1          
-6      <            i              n              t1          
-7      IFT          t1             -              L3          
-8      GOTO         -              -              L2          
-9      LABEL        -              -              L3          
-10     WRITE        a              -              -           
-11     +            a              b              temp        
-12     =            b              -              a           
-13     =            temp           -              b           
-14     +            i              1              i           
-15     GOTO         -              -              L1          
-16     LABEL        -              -              L2          
+0      READ         -              -              a           
+1      READ         -              -              b           
+2      LABEL        -              -              L1          
+3      <            a              b              t1          
+4      IFT          t1             -              L3          
+5      GOTO         -              -              L2          
+6      LABEL        -              -              L3          
+7      +            a              1              t1          
+8      WRITE        t1             -              -           
+9      WRITE        a              -              -           
+10     GOTO         -              -              L1          
+11     LABEL        -              -              L2          
 --------------------------------------------------
-Total de instrucciones: 17
+Total de instrucciones: 12
 ==================================================

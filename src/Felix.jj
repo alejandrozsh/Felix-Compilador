@@ -550,9 +550,22 @@ class CodeGeneratorWalker {
                         "Tipo INTEGER o REAL.",
                         "Use solo valores numericos en operaciones aritmeticas."));
                 }
-                // Promoción implícita: si hay mezcla INTEGER/REAL, el resultado es REAL
+                
+                if (!left.type.equals("UNKNOWN") && !right.type.equals("UNKNOWN") && !left.type.equals(right.type)) {
+                    errors.add(new SemanticError(line, col,
+                        "Operacion aritmetica '" + op + "' entre tipos incompatibles '" + left.type + "' y '" + right.type + "'.",
+                        "Ambos operandos del mismo tipo numerico.",
+                        "Realice la operacion entre operandos del mismo tipo."));
+                }
+                
                 if (isNumeric(left.type) && isNumeric(right.type)) {
-                    resultType = (left.type.equals("REAL") || right.type.equals("REAL")) ? "REAL" : "INTEGER";
+                    resultType = left.type;
+                } else if (!left.type.equals("UNKNOWN")) {
+                    resultType = left.type;
+                } else if (!right.type.equals("UNKNOWN")) {
+                    resultType = right.type;
+                } else {
+                    resultType = "UNKNOWN";
                 }
             } else if (op.equalsIgnoreCase("AND") || op.equalsIgnoreCase("OR")) {
                 if (!left.type.equals("BOOLEAN") && !left.type.equals("UNKNOWN")) {
@@ -589,6 +602,12 @@ class CodeGeneratorWalker {
                         "Comparacion '" + op + "' con tipo no numerico '" + right.type + "'.",
                         "Tipo INTEGER o REAL.",
                         "Use solo numeros en comparaciones de orden."));
+                }
+                if (!left.type.equals("UNKNOWN") && !right.type.equals("UNKNOWN") && !left.type.equals(right.type)) {
+                    errors.add(new SemanticError(line, col,
+                        "Comparacion '" + op + "' entre tipos incompatibles '" + left.type + "' y '" + right.type + "'.",
+                        "Ambos operandos del mismo tipo.",
+                        "Compare valores del mismo tipo."));
                 }
                 resultType = "BOOLEAN";
             }
@@ -1127,7 +1146,7 @@ void Factor() : { Token t; } {
 // ============================================================
 // CONTROL STRUCTURES
 // ============================================================
-void Condicional() : { ExprNode tree; Token t; String lTrue, lFalse, lEnd; } {
+void Condicional() : { ExprNode tree; Token t; String lTrue, lFalse, lEnd; boolean hasElse = false; } {
     <IF> { t = token; } Expression() {
         tree = semanticStack.pop();
         ExpressionResult res = walker().walk(tree, t.beginLine, t.beginColumn);
@@ -1144,13 +1163,16 @@ void Condicional() : { ExprNode tree; Token t; String lTrue, lFalse, lEnd; } {
     }
     <THEN> (SafeStatement())*
     [ <ELSE> {
+        hasElse = true;
         intermediateCode.add(new IntermediateInstruction("GOTO",  null, null, lEnd));
         intermediateCode.add(new IntermediateInstruction("LABEL", null, null, lFalse));
     } (SafeStatement())* {
         intermediateCode.add(new IntermediateInstruction("LABEL", null, null, lEnd));
     } ]
     expectEndIf() {
-        intermediateCode.add(new IntermediateInstruction("LABEL", null, null, lFalse));
+        if (!hasElse) {
+            intermediateCode.add(new IntermediateInstruction("LABEL", null, null, lFalse));
+        }
     }
 }
 

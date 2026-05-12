@@ -1,20 +1,7 @@
-WRITE "Cantidad:";
-READ n;
+READ a;
+READ b;
 
-SET a TO 0;
-SET b TO 1;
-SET i TO 0;
-
-WHILE (i < n) DO
-
-    WRITE a;
-
-    SET temp TO a + b;
-
-    SET a TO b;
-
-    SET b TO temp;
-
-    SET i TO i + 1;
-
+WHILE (a < b) DO
+WRITE a + 1;
+WRITE a;
 ENDWHILE
