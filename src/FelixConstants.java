@@ -91,15 +91,17 @@ public interface FelixConstants {
   /** RegularExpression Id. */
   int ASSIGN_OP = 45;
   /** RegularExpression Id. */
-  int REAL_LIT = 46;
+  int COMMA = 46;
   /** RegularExpression Id. */
-  int INTEGER_LIT = 47;
+  int REAL_LIT = 47;
   /** RegularExpression Id. */
-  int IDENTIFIER = 48;
+  int INTEGER_LIT = 48;
   /** RegularExpression Id. */
-  int STRING_LITERAL = 49;
+  int IDENTIFIER = 49;
   /** RegularExpression Id. */
-  int ERROR = 50;
+  int STRING_LITERAL = 50;
+  /** RegularExpression Id. */
+  int ERROR = 51;
 
   /** Lexical state. */
   int DEFAULT = 0;
@@ -152,6 +154,7 @@ public interface FelixConstants {
     "\">\"",
     "\"<\"",
     "\"=\"",
+    "\",\"",
     "<REAL_LIT>",
     "<INTEGER_LIT>",
     "<IDENTIFIER>",

@@ -858,7 +858,8 @@ TOKEN : {
     < LE:           "<="           > |
     < GT:            ">"           > |
     < LT:           "<"            > |
-    < ASSIGN_OP:     "="           >
+    < ASSIGN_OP:     "="           > |
+    < COMMA:         ","           >
 }
 
 TOKEN : {
@@ -1052,11 +1053,17 @@ void Asignacion() : { Token id; ExprNode tree; int line, col; int errorCountBefo
 }
 
 void EscribirTexto() : { ExprNode tree; Token t; } {
-    <WRITE> { t = token; } Expression() expectSemicolon() {
+    <WRITE> { t = token; } Expression() {
         tree = semanticStack.pop();
         ExpressionResult res = walker().walk(tree, t.beginLine, t.beginColumn);
         intermediateCode.add(new IntermediateInstruction("WRITE", res.operand, null, null));
     }
+    ( <COMMA> Expression() {
+        tree = semanticStack.pop();
+        ExpressionResult res2 = walker().walk(tree, t.beginLine, t.beginColumn);
+        intermediateCode.add(new IntermediateInstruction("WRITE", res2.operand, null, null));
+    } )*
+    expectSemicolon()
 }
 
 void DeclararMatriz() : { Token id, d1, d2; } {

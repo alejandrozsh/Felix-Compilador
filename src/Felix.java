@@ -1003,10 +1003,26 @@ public class Felix implements FelixConstants {
     jj_consume_token(WRITE);
               t = token;
     Expression();
-    expectSemicolon();
         tree = semanticStack.pop();
         ExpressionResult res = walker().walk(tree, t.beginLine, t.beginColumn);
         intermediateCode.add(new IntermediateInstruction("WRITE", res.operand, null, null));
+    label_1:
+    while (true) {
+      switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
+      case COMMA:
+        ;
+        break;
+      default:
+        jj_la1[2] = jj_gen;
+        break label_1;
+      }
+      jj_consume_token(COMMA);
+      Expression();
+        tree = semanticStack.pop();
+        ExpressionResult res2 = walker().walk(tree, t.beginLine, t.beginColumn);
+        intermediateCode.add(new IntermediateInstruction("WRITE", res2.operand, null, null));
+    }
+    expectSemicolon();
   }
 
   final public void DeclararMatriz() throws ParseException {
@@ -1049,7 +1065,7 @@ public class Felix implements FelixConstants {
       jj_consume_token(RBRACKET);
       break;
     default:
-      jj_la1[2] = jj_gen;
+      jj_la1[3] = jj_gen;
       ;
     }
     expectSemicolon();
@@ -1074,7 +1090,7 @@ public class Felix implements FelixConstants {
   final public void Expression() throws ParseException {
                       Token op;
     Term();
-    label_1:
+    label_2:
     while (true) {
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
       case AND:
@@ -1090,8 +1106,8 @@ public class Felix implements FelixConstants {
         ;
         break;
       default:
-        jj_la1[3] = jj_gen;
-        break label_1;
+        jj_la1[4] = jj_gen;
+        break label_2;
       }
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
       case PLUS:
@@ -1125,7 +1141,7 @@ public class Felix implements FelixConstants {
         op = jj_consume_token(OR);
         break;
       default:
-        jj_la1[4] = jj_gen;
+        jj_la1[5] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
@@ -1138,7 +1154,7 @@ public class Felix implements FelixConstants {
   final public void Term() throws ParseException {
                 Token op;
     Factor();
-    label_2:
+    label_3:
     while (true) {
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
       case TIMES:
@@ -1146,8 +1162,8 @@ public class Felix implements FelixConstants {
         ;
         break;
       default:
-        jj_la1[5] = jj_gen;
-        break label_2;
+        jj_la1[6] = jj_gen;
+        break label_3;
       }
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
       case TIMES:
@@ -1157,7 +1173,7 @@ public class Felix implements FelixConstants {
         op = jj_consume_token(DIV);
         break;
       default:
-        jj_la1[6] = jj_gen;
+        jj_la1[7] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
@@ -1203,7 +1219,7 @@ public class Felix implements FelixConstants {
         semanticStack.push(new UnaryOpNode("NEG", negOperand));
       break;
     default:
-      jj_la1[7] = jj_gen;
+      jj_la1[8] = jj_gen;
       if (jj_2_1(2)) {
         t = jj_consume_token(IDENTIFIER);
         jj_consume_token(LBRACKET);
@@ -1226,7 +1242,7 @@ public class Felix implements FelixConstants {
           jj_consume_token(RPAREN);
           break;
         default:
-          jj_la1[8] = jj_gen;
+          jj_la1[9] = jj_gen;
           jj_consume_token(-1);
           throw new ParseException();
         }
@@ -1255,7 +1271,7 @@ public class Felix implements FelixConstants {
         intermediateCode.add(new IntermediateInstruction("GOTO",  null,        null, lFalse));
         intermediateCode.add(new IntermediateInstruction("LABEL", null,        null, lTrue));
     jj_consume_token(THEN);
-    label_3:
+    label_4:
     while (true) {
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
       case SET:
@@ -1269,8 +1285,8 @@ public class Felix implements FelixConstants {
         ;
         break;
       default:
-        jj_la1[9] = jj_gen;
-        break label_3;
+        jj_la1[10] = jj_gen;
+        break label_4;
       }
       SafeStatement();
     }
@@ -1280,7 +1296,7 @@ public class Felix implements FelixConstants {
         hasElse = true;
         intermediateCode.add(new IntermediateInstruction("GOTO",  null, null, lEnd));
         intermediateCode.add(new IntermediateInstruction("LABEL", null, null, lFalse));
-      label_4:
+      label_5:
       while (true) {
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
         case SET:
@@ -1294,15 +1310,15 @@ public class Felix implements FelixConstants {
           ;
           break;
         default:
-          jj_la1[10] = jj_gen;
-          break label_4;
+          jj_la1[11] = jj_gen;
+          break label_5;
         }
         SafeStatement();
       }
         intermediateCode.add(new IntermediateInstruction("LABEL", null, null, lEnd));
       break;
     default:
-      jj_la1[11] = jj_gen;
+      jj_la1[12] = jj_gen;
       ;
     }
     expectEndIf();
@@ -1331,7 +1347,7 @@ public class Felix implements FelixConstants {
         intermediateCode.add(new IntermediateInstruction("GOTO",  null,        null, lEnd));
         intermediateCode.add(new IntermediateInstruction("LABEL", null,        null, lBody));
     jj_consume_token(DO);
-    label_5:
+    label_6:
     while (true) {
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
       case SET:
@@ -1345,8 +1361,8 @@ public class Felix implements FelixConstants {
         ;
         break;
       default:
-        jj_la1[12] = jj_gen;
-        break label_5;
+        jj_la1[13] = jj_gen;
+        break label_6;
       }
       SafeStatement();
     }
@@ -1373,7 +1389,7 @@ public class Felix implements FelixConstants {
         intermediateCode.add(new IntermediateInstruction("IFT",   condTemp,    null,      lBody));
         intermediateCode.add(new IntermediateInstruction("GOTO",  null,        null,      lEnd));
         intermediateCode.add(new IntermediateInstruction("LABEL", null,        null,      lBody));
-    label_6:
+    label_7:
     while (true) {
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
       case SET:
@@ -1387,8 +1403,8 @@ public class Felix implements FelixConstants {
         ;
         break;
       default:
-        jj_la1[13] = jj_gen;
-        break label_6;
+        jj_la1[14] = jj_gen;
+        break label_7;
       }
       SafeStatement();
     }
@@ -1411,15 +1427,15 @@ public class Felix implements FelixConstants {
                 "Una variable previamente declarada.",
                 "Declare la variable antes del SWITCH."));
         }
-    label_7:
+    label_8:
     while (true) {
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
       case CASE:
         ;
         break;
       default:
-        jj_la1[14] = jj_gen;
-        break label_7;
+        jj_la1[15] = jj_gen;
+        break label_8;
       }
       jj_consume_token(CASE);
       num = jj_consume_token(INTEGER_LIT);
@@ -1430,32 +1446,6 @@ public class Felix implements FelixConstants {
         intermediateCode.add(new IntermediateInstruction("IFT",   condTemp, null,      lCase));
         intermediateCode.add(new IntermediateInstruction("GOTO",  null,     null,      skipLabel));
         intermediateCode.add(new IntermediateInstruction("LABEL", null,     null,      lCase));
-      label_8:
-      while (true) {
-        switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-        case SET:
-        case WRITE:
-        case READ:
-        case IF:
-        case NEW:
-        case WHILE:
-        case FOR:
-        case SWITCH:
-          ;
-          break;
-        default:
-          jj_la1[15] = jj_gen;
-          break label_8;
-        }
-        SafeStatement();
-      }
-        intermediateCode.add(new IntermediateInstruction("GOTO",  null, null, lEnd));
-        intermediateCode.add(new IntermediateInstruction("LABEL", null, null, skipLabel));
-    }
-    switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-    case DEFAULT_CASE:
-      jj_consume_token(DEFAULT_CASE);
-        intermediateCode.add(new IntermediateInstruction("LABEL", null, null, newLabel()));
       label_9:
       while (true) {
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
@@ -1475,9 +1465,35 @@ public class Felix implements FelixConstants {
         }
         SafeStatement();
       }
+        intermediateCode.add(new IntermediateInstruction("GOTO",  null, null, lEnd));
+        intermediateCode.add(new IntermediateInstruction("LABEL", null, null, skipLabel));
+    }
+    switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
+    case DEFAULT_CASE:
+      jj_consume_token(DEFAULT_CASE);
+        intermediateCode.add(new IntermediateInstruction("LABEL", null, null, newLabel()));
+      label_10:
+      while (true) {
+        switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
+        case SET:
+        case WRITE:
+        case READ:
+        case IF:
+        case NEW:
+        case WHILE:
+        case FOR:
+        case SWITCH:
+          ;
+          break;
+        default:
+          jj_la1[17] = jj_gen;
+          break label_10;
+        }
+        SafeStatement();
+      }
       break;
     default:
-      jj_la1[17] = jj_gen;
+      jj_la1[18] = jj_gen;
       ;
     }
     jj_consume_token(ENDSWITCH);
@@ -1511,7 +1527,7 @@ public class Felix implements FelixConstants {
   private boolean jj_lookingAhead = false;
   private boolean jj_semLA;
   private int jj_gen;
-  final private int[] jj_la1 = new int[18];
+  final private int[] jj_la1 = new int[19];
   static private int[] jj_la1_0;
   static private int[] jj_la1_1;
   static {
@@ -1519,10 +1535,10 @@ public class Felix implements FelixConstants {
       jj_la1_init_1();
    }
    private static void jj_la1_init_0() {
-      jj_la1_0 = new int[] {0x5204740,0x0,0x0,0x80030000,0x80030000,0x0,0x0,0x1c0000,0x0,0x5204740,0x5204740,0x1000,0x5204740,0x5204740,0x8000000,0x5204740,0x5204740,0x10000000,};
+      jj_la1_0 = new int[] {0x5204740,0x0,0x0,0x0,0x80030000,0x80030000,0x0,0x0,0x1c0000,0x0,0x5204740,0x5204740,0x1000,0x5204740,0x5204740,0x8000000,0x5204740,0x5204740,0x10000000,};
    }
    private static void jj_la1_init_1() {
-      jj_la1_1 = new int[] {0x0,0x20,0x20,0x1f81,0x1f81,0x6,0x6,0x2c001,0x10008,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,};
+      jj_la1_1 = new int[] {0x0,0x20,0x4000,0x20,0x1f81,0x1f81,0x6,0x6,0x58001,0x20008,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,};
    }
   final private JJCalls[] jj_2_rtns = new JJCalls[1];
   private boolean jj_rescan = false;
@@ -1539,7 +1555,7 @@ public class Felix implements FelixConstants {
     token = new Token();
     jj_ntk = -1;
     jj_gen = 0;
-    for (int i = 0; i < 18; i++) jj_la1[i] = -1;
+    for (int i = 0; i < 19; i++) jj_la1[i] = -1;
     for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -1554,7 +1570,7 @@ public class Felix implements FelixConstants {
     token = new Token();
     jj_ntk = -1;
     jj_gen = 0;
-    for (int i = 0; i < 18; i++) jj_la1[i] = -1;
+    for (int i = 0; i < 19; i++) jj_la1[i] = -1;
     for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -1565,7 +1581,7 @@ public class Felix implements FelixConstants {
     token = new Token();
     jj_ntk = -1;
     jj_gen = 0;
-    for (int i = 0; i < 18; i++) jj_la1[i] = -1;
+    for (int i = 0; i < 19; i++) jj_la1[i] = -1;
     for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -1576,7 +1592,7 @@ public class Felix implements FelixConstants {
     token = new Token();
     jj_ntk = -1;
     jj_gen = 0;
-    for (int i = 0; i < 18; i++) jj_la1[i] = -1;
+    for (int i = 0; i < 19; i++) jj_la1[i] = -1;
     for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -1586,7 +1602,7 @@ public class Felix implements FelixConstants {
     token = new Token();
     jj_ntk = -1;
     jj_gen = 0;
-    for (int i = 0; i < 18; i++) jj_la1[i] = -1;
+    for (int i = 0; i < 19; i++) jj_la1[i] = -1;
     for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -1596,7 +1612,7 @@ public class Felix implements FelixConstants {
     token = new Token();
     jj_ntk = -1;
     jj_gen = 0;
-    for (int i = 0; i < 18; i++) jj_la1[i] = -1;
+    for (int i = 0; i < 19; i++) jj_la1[i] = -1;
     for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -1711,12 +1727,12 @@ public class Felix implements FelixConstants {
   /** Generate ParseException. */
   public ParseException generateParseException() {
     jj_expentries.clear();
-    boolean[] la1tokens = new boolean[51];
+    boolean[] la1tokens = new boolean[52];
     if (jj_kind >= 0) {
       la1tokens[jj_kind] = true;
       jj_kind = -1;
     }
-    for (int i = 0; i < 18; i++) {
+    for (int i = 0; i < 19; i++) {
       if (jj_la1[i] == jj_gen) {
         for (int j = 0; j < 32; j++) {
           if ((jj_la1_0[i] & (1<<j)) != 0) {
@@ -1728,7 +1744,7 @@ public class Felix implements FelixConstants {
         }
       }
     }
-    for (int i = 0; i < 51; i++) {
+    for (int i = 0; i < 52; i++) {
       if (la1tokens[i]) {
         jj_expentry = new int[1];
         jj_expentry[0] = i;
