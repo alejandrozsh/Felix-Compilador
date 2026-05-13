@@ -774,7 +774,202 @@ public class Felix implements FelixConstants {
                 System.out.println("Archivos generados exitosamente: \n- " + unoptFileName + "\n- " + optFileName);
             } catch (Exception ex) {
             } finally { if (pwOpt != null) pwOpt.close(); }
+
+            // --- 4. EJECUTAR LOS CUÁDRUPLES OPTIMIZADOS EN TERMINAL ---
+            System.out.println("\n==================================================");
+            System.out.println("EJECUCI\u00d3N DEL PROGRAMA");
+            System.out.println("==================================================");
+
+            java.util.Scanner sc = new java.util.Scanner(System.in);
+            Map<String, Object> mem = new LinkedHashMap<String, Object>();
+            Map<String, Integer> lblIdx = new HashMap<String, Integer>();
+            Map<String, double[][]> matrices = new HashMap<String, double[][]>();
+            Map<String, int[]> matDims = new HashMap<String, int[]>();
+
+            // Pre-indexar etiquetas
+            for (int li = 0; li < finalCode.size(); li++) {
+                IntermediateInstruction ins = finalCode.get(li);
+                if (ins.operator.equals("LABEL") && ins.result != null) {
+                    lblIdx.put(ins.result, li);
+                }
+            }
+
+            int pc = 0;
+            int maxSteps = 1000000;
+            int steps = 0;
+            boolean runtimeError = false;
+
+            while (pc < finalCode.size() && steps < maxSteps && !runtimeError) {
+                steps++;
+                IntermediateInstruction q = finalCode.get(pc);
+                String op = q.operator;
+
+                try {
+                    if (op.equals("=")) {
+                        mem.put(q.result, resolveVal(q.arg1, mem));
+                        pc++;
+                    } else if (op.equals("+") || op.equals("-") || op.equals("*") || op.equals("/") || op.equals("%")) {
+                        double a = toNum(resolveVal(q.arg1, mem));
+                        double b = toNum(resolveVal(q.arg2, mem));
+                        double r = 0;
+                        if (op.equals("+")) r = a + b;
+                        else if (op.equals("-")) r = a - b;
+                        else if (op.equals("*")) r = a * b;
+                        else if (op.equals("/")) {
+                            if (b == 0) { System.out.println("[Error de ejecuci\u00f3n: Divisi\u00f3n por cero]"); r = 0; }
+                            else r = a / b;
+                        } else if (op.equals("%")) r = a % b;
+                        mem.put(q.result, r);
+                        pc++;
+                    } else if (op.equals("NEG")) {
+                        double a = toNum(resolveVal(q.arg1, mem));
+                        mem.put(q.result, -a);
+                        pc++;
+                    } else if (op.equals("==")) {
+                        Object a = resolveVal(q.arg1, mem);
+                        Object b = resolveVal(q.arg2, mem);
+                        mem.put(q.result, eqVals(a, b) ? 1.0 : 0.0);
+                        pc++;
+                    } else if (op.equals("!=")) {
+                        Object a = resolveVal(q.arg1, mem);
+                        Object b = resolveVal(q.arg2, mem);
+                        mem.put(q.result, !eqVals(a, b) ? 1.0 : 0.0);
+                        pc++;
+                    } else if (op.equals("<")) {
+                        double a = toNum(resolveVal(q.arg1, mem)); double b = toNum(resolveVal(q.arg2, mem));
+                        mem.put(q.result, a < b ? 1.0 : 0.0); pc++;
+                    } else if (op.equals(">")) {
+                        double a = toNum(resolveVal(q.arg1, mem)); double b = toNum(resolveVal(q.arg2, mem));
+                        mem.put(q.result, a > b ? 1.0 : 0.0); pc++;
+                    } else if (op.equals("<=")) {
+                        double a = toNum(resolveVal(q.arg1, mem)); double b = toNum(resolveVal(q.arg2, mem));
+                        mem.put(q.result, a <= b ? 1.0 : 0.0); pc++;
+                    } else if (op.equals(">=")) {
+                        double a = toNum(resolveVal(q.arg1, mem)); double b = toNum(resolveVal(q.arg2, mem));
+                        mem.put(q.result, a >= b ? 1.0 : 0.0); pc++;
+                    } else if (op.equalsIgnoreCase("AND")) {
+                        double a = toNum(resolveVal(q.arg1, mem)); double b = toNum(resolveVal(q.arg2, mem));
+                        mem.put(q.result, (a != 0 && b != 0) ? 1.0 : 0.0); pc++;
+                    } else if (op.equalsIgnoreCase("OR")) {
+                        double a = toNum(resolveVal(q.arg1, mem)); double b = toNum(resolveVal(q.arg2, mem));
+                        mem.put(q.result, (a != 0 || b != 0) ? 1.0 : 0.0); pc++;
+                    } else if (op.equalsIgnoreCase("NOT")) {
+                        double a = toNum(resolveVal(q.arg1, mem));
+                        mem.put(q.result, (a == 0) ? 1.0 : 0.0); pc++;
+                    } else if (op.equals("WRITE")) {
+                        Object val = resolveVal(q.arg1, mem);
+                        System.out.println(fmtVal(val));
+                        pc++;
+                    } else if (op.equals("READ")) {
+                        System.out.print(q.result + " = ? ");
+                        String input = sc.nextLine().trim();
+                        try {
+                            if (input.contains(".")) mem.put(q.result, Double.parseDouble(input));
+                            else mem.put(q.result, (double) Integer.parseInt(input));
+                        } catch (NumberFormatException nfe) {
+                            mem.put(q.result, "\"" + input + "\"");
+                        }
+                        pc++;
+                    } else if (op.equals("LABEL")) {
+                        pc++;
+                    } else if (op.equals("GOTO")) {
+                        if (lblIdx.containsKey(q.result)) pc = lblIdx.get(q.result);
+                        else { System.out.println("[Error de ejecuci\u00f3n: Etiqueta no encontrada: " + q.result + "]"); runtimeError = true; }
+                    } else if (op.equals("IFT")) {
+                        double cond = toNum(resolveVal(q.arg1, mem));
+                        if (cond != 0) {
+                            if (lblIdx.containsKey(q.result)) pc = lblIdx.get(q.result);
+                            else { System.out.println("[Error: Etiqueta no encontrada: " + q.result + "]"); runtimeError = true; }
+                        } else { pc++; }
+                    } else if (op.equals("NEWMAT")) {
+                        String[] dims = q.arg2.split("x");
+                        int d1 = Integer.parseInt(dims[0]); int d2 = Integer.parseInt(dims[1]);
+                        matrices.put(q.arg1, new double[d1][d2]);
+                        matDims.put(q.arg1, new int[]{d1, d2});
+                        pc++;
+                    } else if (op.equals("MATSET")) {
+                        String[] idx = q.arg1.split(",");
+                        int r = (int) toNum(resolveVal(idx[0].trim(), mem));
+                        int c = (int) toNum(resolveVal(idx[1].trim(), mem));
+                        double val = toNum(resolveVal(q.arg2, mem));
+                        if (matrices.containsKey(q.result)) matrices.get(q.result)[r][c] = val;
+                        pc++;
+                    } else if (op.equals("MATGET")) {
+                        String[] idx = q.arg2.split(",");
+                        int r = (int) toNum(resolveVal(idx[0].trim(), mem));
+                        int c = (int) toNum(resolveVal(idx[1].trim(), mem));
+                        if (matrices.containsKey(q.arg1)) mem.put(q.result, matrices.get(q.arg1)[r][c]);
+                        else mem.put(q.result, 0.0);
+                        pc++;
+                    } else if (op.equals("MATREAD")) {
+                        String[] idx = q.arg1.split(",");
+                        int r = (int) toNum(resolveVal(idx[0].trim(), mem));
+                        int c = (int) toNum(resolveVal(idx[1].trim(), mem));
+                        System.out.print(q.result + "[" + r + "][" + c + "] = ? ");
+                        String input = sc.nextLine().trim();
+                        try {
+                            double val = Double.parseDouble(input);
+                            if (matrices.containsKey(q.result)) matrices.get(q.result)[r][c] = val;
+                        } catch (NumberFormatException nfe) {
+                            System.out.println("[Error: Se esperaba un valor num\u00e9rico para la matriz]");
+                        }
+                        pc++;
+                    } else {
+                        pc++; // operación desconocida, saltar
+                    }
+                } catch (Exception ex) {
+                    System.out.println("[Error de ejecuci\u00f3n en instrucci\u00f3n " + pc + ": " + ex.getMessage() + "]");
+                    runtimeError = true;
+                }
+            }
+
+            if (steps >= maxSteps) {
+                System.out.println("\n[Advertencia: Se alcanz\u00f3 el l\u00edmite de ejecuci\u00f3n (" + maxSteps + " pasos). Posible bucle infinito.]");
+            }
+
+            System.out.println("\n==================================================");
+            System.out.println("Ejecuci\u00f3n finalizada.");
+            System.out.println("==================================================");
         }
+    }
+
+    // --- Métodos auxiliares para el intérprete inline ---
+    static Object resolveVal(String s, Map<String, Object> mem) {
+        if (s == null) return 0.0;
+        if (s.startsWith("\"") && s.endsWith("\"")) return s;
+        if (s.equalsIgnoreCase("true")) return 1.0;
+        if (s.equalsIgnoreCase("false")) return 0.0;
+        if (mem.containsKey(s)) return mem.get(s);
+        try { return Double.parseDouble(s); } catch (NumberFormatException e) { return s; }
+    }
+
+    static double toNum(Object val) {
+        if (val instanceof Number) return ((Number) val).doubleValue();
+        if (val instanceof String) {
+            String s = (String) val;
+            if (s.startsWith("\"")) return 0.0;
+            try { return Double.parseDouble(s); } catch (NumberFormatException e) { return 0.0; }
+        }
+        return 0.0;
+    }
+
+    static boolean eqVals(Object a, Object b) {
+        if (a instanceof Number && b instanceof Number) return ((Number) a).doubleValue() == ((Number) b).doubleValue();
+        return String.valueOf(a).equals(String.valueOf(b));
+    }
+
+    static String fmtVal(Object val) {
+        if (val instanceof Double) {
+            double d = (Double) val;
+            if (d == Math.floor(d) && !Double.isInfinite(d)) return String.valueOf((long) d);
+            return String.valueOf(d);
+        }
+        if (val instanceof String) {
+            String s = (String) val;
+            if (s.startsWith("\"") && s.endsWith("\"")) return s.substring(1, s.length() - 1);
+            return s;
+        }
+        return String.valueOf(val);
     }
 
     static String getCustomTokenName(int kind) {

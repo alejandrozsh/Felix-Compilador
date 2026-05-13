@@ -1,7 +1,23 @@
-READ a;
-READ b;
 
-WHILE (a < b) DO
-WRITE a + 1;
-WRITE a;
-ENDWHILE
+NEW MATRIX mat[2][2];
+
+WRITE "Valor 0,0";
+READ mat[0][0];
+
+WRITE "Valor 0,1";
+READ mat[0][1];
+
+WRITE "Valor 1,0";
+READ mat[1][0];
+
+WRITE "Valor 1,1";
+READ mat[1][1];
+
+SET suma TO mat[0][0] + mat[0][1];
+
+SET suma TO suma + mat[1][0];
+
+SET suma TO suma + mat[1][1];
+
+WRITE "Resultado:";
+WRITE suma;
