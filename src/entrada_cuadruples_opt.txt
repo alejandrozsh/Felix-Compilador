@@ -3,7 +3,11 @@ Codigo optimizado
 ==================================================
 No.    Operador     Argumento 1    Argumento 2    Resultado   
 --------------------------------------------------
-0      WRITE        "Hellow World" -              -           
+0      READ         -              -              a           
+1      READ         -              -              b           
+2      +            a              b              resultado   
+3      WRITE        "tu resultado es:" -              -           
+4      WRITE        resultado      -              -           
 --------------------------------------------------
-Total de instrucciones: 1
+Total de instrucciones: 5
 ==================================================

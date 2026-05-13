@@ -3,6 +3,11 @@ Codigo sin optimizar
 ==================================================
 No.    Operador     Argumento 1    Argumento 2    Resultado   
 --------------------------------------------------
-0      WRITE        "Hellow World" -              -           
+0      READ         -              -              a           
+1      READ         -              -              b           
+2      +            a              b              t1          
+3      =            t1             -              resultado   
+4      WRITE        "tu resultado es:" -              -           
+5      WRITE        resultado      -              -           
 --------------------------------------------------
-Total de instrucciones: 1
+Total de instrucciones: 6

@@ -654,6 +654,7 @@ public class Felix {
     public static void main(String[] args) {
         java.io.InputStream inputStream = System.in;
         String sourceFileName = "entrada";
+        boolean readFromStdin = (args.length == 0);
 
         if (args.length > 0) {
             sourceFileName = args[0];
@@ -661,6 +662,24 @@ public class Felix {
                 inputStream = new java.io.FileInputStream(args[0]);
             } catch (java.io.FileNotFoundException ex) {
                 System.out.println("ERROR: No se encontró el archivo '" + args[0] + "'.");
+                System.exit(1);
+            }
+        } else {
+            // Leer todo stdin en un buffer para que el parser no consuma System.in
+            // El usuario debe presionar Ctrl+D (Unix/Mac) o Ctrl+Z (Windows) para terminar
+            System.out.println("Escribe tu código Felix. Presiona Ctrl+D (Mac/Linux) para compilar:");
+            System.out.println("--------------------------------------------------");
+            System.out.flush();
+            try {
+                java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+                byte[] buf = new byte[1024];
+                int n;
+                while ((n = System.in.read(buf)) != -1) {
+                    baos.write(buf, 0, n);
+                }
+                inputStream = new java.io.ByteArrayInputStream(baos.toByteArray());
+            } catch (java.io.IOException ex) {
+                System.out.println("ERROR: No se pudo leer la entrada estándar.");
                 System.exit(1);
             }
         }
@@ -786,7 +805,18 @@ public class Felix {
             System.out.println("EJECUCIÓN DEL PROGRAMA");
             System.out.println("==================================================");
 
-            java.util.Scanner sc = new java.util.Scanner(System.in);
+            // Para READ interactivo: si leímos el código de stdin, necesitamos
+            // abrir /dev/tty directamente para leer la entrada del usuario
+            java.io.InputStream readInput = System.in;
+            if (readFromStdin) {
+                try {
+                    readInput = new java.io.FileInputStream("/dev/tty");
+                } catch (java.io.FileNotFoundException ttyEx) {
+                    // Fallback: intentar System.in de todas formas (ej. en Windows)
+                    readInput = System.in;
+                }
+            }
+            java.util.Scanner sc = new java.util.Scanner(readInput);
             Map<String, Object> mem = new LinkedHashMap<String, Object>();
             Map<String, Integer> lblIdx = new HashMap<String, Integer>();
             Map<String, double[][]> matrices = new HashMap<String, double[][]>();
@@ -865,9 +895,11 @@ public class Felix {
                     } else if (op.equals("WRITE")) {
                         Object val = resolveVal(q.arg1, mem);
                         System.out.println(fmtVal(val));
+                        System.out.flush();
                         pc++;
                     } else if (op.equals("READ")) {
                         System.out.print(q.result + " = ? ");
+                        System.out.flush();
                         String input = sc.nextLine().trim();
                         try {
                             if (input.contains(".")) mem.put(q.result, Double.parseDouble(input));
@@ -912,6 +944,7 @@ public class Felix {
                         int r = (int) toNum(resolveVal(idx[0].trim(), mem));
                         int c = (int) toNum(resolveVal(idx[1].trim(), mem));
                         System.out.print(q.result + "[" + r + "][" + c + "] = ? ");
+                        System.out.flush();
                         String input = sc.nextLine().trim();
                         try {
                             double val = Double.parseDouble(input);
