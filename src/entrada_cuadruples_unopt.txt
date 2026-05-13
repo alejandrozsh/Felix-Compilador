@@ -7,7 +7,7 @@ No.    Operador     Argumento 1    Argumento 2    Resultado
 1      READ         -              -              b           
 2      +            a              b              t1          
 3      =            t1             -              resultado   
-4      WRITE        "tu resultado es:" -              -           
+4      WRITE        "Tu resultado es" -              -           
 5      WRITE        resultado      -              -           
 --------------------------------------------------
 Total de instrucciones: 6
