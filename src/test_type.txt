@@ -1,3 +1,0 @@
-SET x TO 5;
-SET y TO 3.14;
-WRITE x + y;

@@ -845,53 +845,66 @@ public class Felix {
                         mem.put(q.result, resolveVal(q.arg1, mem));
                         pc++;
                     } else if (op.equals("+") || op.equals("-") || op.equals("*") || op.equals("/") || op.equals("%")) {
-                        double a = toNum(resolveVal(q.arg1, mem));
-                        double b = toNum(resolveVal(q.arg2, mem));
-                        double r = 0;
-                        if (op.equals("+")) r = a + b;
-                        else if (op.equals("-")) r = a - b;
-                        else if (op.equals("*")) r = a * b;
-                        else if (op.equals("/")) {
-                            if (b == 0) { System.out.println("[Error de ejecución: División por cero]"); r = 0; }
-                            else r = a / b;
-                        } else if (op.equals("%")) r = a % b;
-                        mem.put(q.result, r);
+                        Object objA = resolveVal(q.arg1, mem);
+                        Object objB = resolveVal(q.arg2, mem);
+                        checkTypeMatch(objA, objB);
+                        
+                        if (objA instanceof Integer && objB instanceof Integer) {
+                            int a = (Integer) objA; int b = (Integer) objB;
+                            int r = 0;
+                            if (op.equals("+")) r = a + b;
+                            else if (op.equals("-")) r = a - b;
+                            else if (op.equals("*")) r = a * b;
+                            else if (op.equals("/")) {
+                                if (b == 0) throw new Exception("División por cero entera");
+                                r = a / b;
+                            } else if (op.equals("%")) r = a % b;
+                            mem.put(q.result, r);
+                        } else {
+                            double a = toNum(objA); double b = toNum(objB);
+                            double r = 0;
+                            if (op.equals("+")) r = a + b;
+                            else if (op.equals("-")) r = a - b;
+                            else if (op.equals("*")) r = a * b;
+                            else if (op.equals("/")) {
+                                if (b == 0) throw new Exception("División por cero");
+                                r = a / b;
+                            } else if (op.equals("%")) r = a % b;
+                            mem.put(q.result, r);
+                        }
                         pc++;
                     } else if (op.equals("NEG")) {
-                        double a = toNum(resolveVal(q.arg1, mem));
-                        mem.put(q.result, -a);
+                        Object objA = resolveVal(q.arg1, mem);
+                        if (objA instanceof Integer) mem.put(q.result, -((Integer) objA));
+                        else mem.put(q.result, -toNum(objA));
                         pc++;
                     } else if (op.equals("==")) {
-                        Object a = resolveVal(q.arg1, mem);
-                        Object b = resolveVal(q.arg2, mem);
-                        mem.put(q.result, eqVals(a, b) ? 1.0 : 0.0);
-                        pc++;
+                        Object a = resolveVal(q.arg1, mem); Object b = resolveVal(q.arg2, mem);
+                        mem.put(q.result, eqVals(a, b) ? "TRUE" : "FALSE"); pc++;
                     } else if (op.equals("!=")) {
-                        Object a = resolveVal(q.arg1, mem);
-                        Object b = resolveVal(q.arg2, mem);
-                        mem.put(q.result, !eqVals(a, b) ? 1.0 : 0.0);
-                        pc++;
+                        Object a = resolveVal(q.arg1, mem); Object b = resolveVal(q.arg2, mem);
+                        mem.put(q.result, !eqVals(a, b) ? "TRUE" : "FALSE"); pc++;
                     } else if (op.equals("<")) {
                         double a = toNum(resolveVal(q.arg1, mem)); double b = toNum(resolveVal(q.arg2, mem));
-                        mem.put(q.result, a < b ? 1.0 : 0.0); pc++;
+                        mem.put(q.result, a < b ? "TRUE" : "FALSE"); pc++;
                     } else if (op.equals(">")) {
                         double a = toNum(resolveVal(q.arg1, mem)); double b = toNum(resolveVal(q.arg2, mem));
-                        mem.put(q.result, a > b ? 1.0 : 0.0); pc++;
+                        mem.put(q.result, a > b ? "TRUE" : "FALSE"); pc++;
                     } else if (op.equals("<=")) {
                         double a = toNum(resolveVal(q.arg1, mem)); double b = toNum(resolveVal(q.arg2, mem));
-                        mem.put(q.result, a <= b ? 1.0 : 0.0); pc++;
+                        mem.put(q.result, a <= b ? "TRUE" : "FALSE"); pc++;
                     } else if (op.equals(">=")) {
                         double a = toNum(resolveVal(q.arg1, mem)); double b = toNum(resolveVal(q.arg2, mem));
-                        mem.put(q.result, a >= b ? 1.0 : 0.0); pc++;
+                        mem.put(q.result, a >= b ? "TRUE" : "FALSE"); pc++;
                     } else if (op.equalsIgnoreCase("AND")) {
                         double a = toNum(resolveVal(q.arg1, mem)); double b = toNum(resolveVal(q.arg2, mem));
-                        mem.put(q.result, (a != 0 && b != 0) ? 1.0 : 0.0); pc++;
+                        mem.put(q.result, (a != 0 && b != 0) ? "TRUE" : "FALSE"); pc++;
                     } else if (op.equalsIgnoreCase("OR")) {
                         double a = toNum(resolveVal(q.arg1, mem)); double b = toNum(resolveVal(q.arg2, mem));
-                        mem.put(q.result, (a != 0 || b != 0) ? 1.0 : 0.0); pc++;
+                        mem.put(q.result, (a != 0 || b != 0) ? "TRUE" : "FALSE"); pc++;
                     } else if (op.equalsIgnoreCase("NOT")) {
                         double a = toNum(resolveVal(q.arg1, mem));
-                        mem.put(q.result, (a == 0) ? 1.0 : 0.0); pc++;
+                        mem.put(q.result, (a == 0) ? "TRUE" : "FALSE"); pc++;
                     } else if (op.equals("WRITE")) {
                         Object val = resolveVal(q.arg1, mem);
                         System.out.println(fmtVal(val));
@@ -903,9 +916,13 @@ public class Felix {
                         String input = sc.nextLine().trim();
                         try {
                             if (input.contains(".")) mem.put(q.result, Double.parseDouble(input));
-                            else mem.put(q.result, (double) Integer.parseInt(input));
+                            else mem.put(q.result, Integer.parseInt(input));
                         } catch (NumberFormatException nfe) {
-                            mem.put(q.result, "\"" + input + "\"");
+                            if (input.equalsIgnoreCase("true") || input.equalsIgnoreCase("false")) {
+                                mem.put(q.result, input.toUpperCase());
+                            } else {
+                                mem.put(q.result, "\"" + input + "\"");
+                            }
                         }
                         pc++;
                     } else if (op.equals("LABEL")) {
@@ -914,8 +931,12 @@ public class Felix {
                         if (lblIdx.containsKey(q.result)) pc = lblIdx.get(q.result);
                         else { System.out.println("[Error de ejecución: Etiqueta no encontrada: " + q.result + "]"); runtimeError = true; }
                     } else if (op.equals("IFT")) {
-                        double cond = toNum(resolveVal(q.arg1, mem));
-                        if (cond != 0) {
+                        Object condObj = resolveVal(q.arg1, mem);
+                        boolean isTrue = false;
+                        if (condObj instanceof String && condObj.equals("TRUE")) isTrue = true;
+                        else if (condObj instanceof Number && ((Number)condObj).doubleValue() != 0) isTrue = true;
+                        
+                        if (isTrue) {
                             if (lblIdx.containsKey(q.result)) pc = lblIdx.get(q.result);
                             else { System.out.println("[Error: Etiqueta no encontrada: " + q.result + "]"); runtimeError = true; }
                         } else { pc++; }
@@ -974,22 +995,34 @@ public class Felix {
 
     // --- Métodos auxiliares para el intérprete inline ---
     static Object resolveVal(String s, Map<String, Object> mem) {
-        if (s == null) return 0.0;
+        if (s == null) return 0;
         if (s.startsWith("\"") && s.endsWith("\"")) return s;
-        if (s.equalsIgnoreCase("true")) return 1.0;
-        if (s.equalsIgnoreCase("false")) return 0.0;
+        if (s.equalsIgnoreCase("true") || s.equals("TRUE")) return "TRUE";
+        if (s.equalsIgnoreCase("false") || s.equals("FALSE")) return "FALSE";
         if (mem.containsKey(s)) return mem.get(s);
-        try { return Double.parseDouble(s); } catch (NumberFormatException e) { return s; }
+        try { 
+            if (s.contains(".")) return Double.parseDouble(s); 
+            else return Integer.parseInt(s);
+        } catch (NumberFormatException e) { return s; }
     }
 
-    static double toNum(Object val) {
+    static void checkTypeMatch(Object a, Object b) throws Exception {
+        if ((a instanceof Double && b instanceof Integer) || (a instanceof Integer && b instanceof Double)) {
+            throw new Exception("Tipos incompatibles en operación: no se puede combinar REAL e INTEGER");
+        }
+    }
+
+    static double toNum(Object val) throws Exception {
         if (val instanceof Number) return ((Number) val).doubleValue();
         if (val instanceof String) {
             String s = (String) val;
-            if (s.startsWith("\"")) return 0.0;
-            try { return Double.parseDouble(s); } catch (NumberFormatException e) { return 0.0; }
+            if (s.startsWith("\"")) throw new Exception("No se puede realizar operacion matematica con un string: " + s);
+            if (s.equals("TRUE") || s.equals("FALSE")) throw new Exception("No se puede realizar operacion matematica con un booleano: " + s);
+            try { return Double.parseDouble(s); } catch (NumberFormatException e) {
+                throw new Exception("Valor no numerico en operacion matematica: " + s);
+            }
         }
-        return 0.0;
+        throw new Exception("Tipo desconocido en operacion matematica");
     }
 
     static boolean eqVals(Object a, Object b) {
@@ -998,6 +1031,7 @@ public class Felix {
     }
 
     static String fmtVal(Object val) {
+        if (val instanceof Integer) return String.valueOf(val);
         if (val instanceof Double) {
             double d = (Double) val;
             if (d == Math.floor(d) && !Double.isInfinite(d)) return String.valueOf((long) d);
