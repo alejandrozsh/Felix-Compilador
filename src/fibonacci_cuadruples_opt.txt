@@ -1,0 +1,39 @@
+==================================================
+Codigo optimizado
+==================================================
+No.    Operador     Argumento 1    Argumento 2    Resultado   
+--------------------------------------------------
+0      NEWARR       fib            100            -           
+1      ARRSET       0              0              fib         
+2      ARRSET       1              1              fib         
+3      READ         -              -              inicio      
+4      READ         -              -              fin         
+5      =            2              -              i           
+6      LABEL        -              -              L1          
+7      <=           i              fin            t_for_i     
+8      IFT          t_for_i        -              L2          
+9      GOTO         -              -              L3          
+10     LABEL        -              -              L2          
+11     -            i              1              t1          
+12     ARRGET       fib            t1             t2          
+13     -            i              2              t3          
+14     ARRGET       fib            t3             t4          
+15     +            t2             t4             t5          
+16     ARRSET       i              t5             fib         
+17     +            i              1              i           
+18     GOTO         -              -              L1          
+19     LABEL        -              -              L3          
+20     =            inicio         -              j           
+21     LABEL        -              -              L4          
+22     <=           j              fin            t_for_j     
+23     IFT          t_for_j        -              L5          
+24     GOTO         -              -              L6          
+25     LABEL        -              -              L5          
+26     ARRGET       fib            j              t1          
+27     WRITE        t1             -              -           
+28     +            j              1              j           
+29     GOTO         -              -              L4          
+30     LABEL        -              -              L6          
+--------------------------------------------------
+Total de instrucciones: 31
+==================================================

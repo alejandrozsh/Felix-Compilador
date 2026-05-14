@@ -87,7 +87,7 @@ app.post('/api/compile', (req, res) => {
 
     // Paso 1: Ejecutar el compilador Felix
     const javaOpts = '"-Dfile.encoding=UTF-8"';
-    exec(`java ${javaOpts} Felix entrada_web.txt`, { cwd: COMPILER_DIR, encoding: 'utf8' }, (error, stdout, stderr) => {
+    exec(`java ${javaOpts} Felix entrada_web.txt -noexec`, { cwd: COMPILER_DIR, encoding: 'utf8' }, (error, stdout, stderr) => {
         
         // Leemos los archivos generados por Felix
         let quadsUnopt = "";

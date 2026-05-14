@@ -45,6 +45,14 @@ class MatrixAccessNode extends ExprNode {
     }
 }
 
+class ArrayAccessNode extends ExprNode {
+    String name; ExprNode index;
+    public ArrayAccessNode(String name, ExprNode index) {
+        this.name = name;
+        this.index = index; this.type = "PENDING_LOOKUP";
+    }
+}
+
 // ============================================================
 // INTERMEDIATE CODE — QUADRUPLES
 // ============================================================
@@ -382,6 +390,11 @@ class Symbol {
         this.type = "MATRIX"; this.dim1 = d1; this.dim2 = d2;
         this.address = addr; this.scope = scope;
     }
+    public Symbol(String name, int size, int addr, String scope) {
+        this.name = name;
+        this.type = "ARRAY"; this.dim1 = size;
+        this.address = addr; this.scope = scope;
+    }
 }
 
 class MemoryManager {
@@ -412,6 +425,14 @@ class SymbolTable {
         if (table.containsKey(key)) return false;
         int addr = memoryManager.allocate(d1 * d2 * 4);
         table.put(key, new Symbol(name, d1, d2, addr, currentScope));
+        return true;
+    }
+
+    public boolean addArray(String name, int size) {
+        String key = (name + "@" + currentScope).toUpperCase();
+        if (table.containsKey(key)) return false;
+        int addr = memoryManager.allocate(size * 4);
+        table.put(key, new Symbol(name, size, addr, currentScope));
         return true;
     }
 
@@ -502,6 +523,21 @@ class CodeGeneratorWalker {
             ExpressionResult c = walk(n.col, line, col);
             String temp = newTemp();
             code.add(new IntermediateInstruction("MATGET", n.name, r.operand + "," + c.operand, temp));
+            return new ExpressionResult(temp, "REAL");
+        }
+        if (node instanceof ArrayAccessNode) {
+            ArrayAccessNode n = (ArrayAccessNode) node;
+            Symbol s = symbolTable.lookup(n.name);
+            if (s == null) {
+                errors.add(new SemanticError(line, col,
+                    "Arreglo '" + n.name + "' no ha sido declarado.",
+                    "Un arreglo declarado con NEW ARRAY.",
+                    "Declare el arreglo: NEW ARRAY " + n.name + "[tamaño];"));
+                return new ExpressionResult(n.name, "UNKNOWN");
+            }
+            ExpressionResult idx = walk(n.index, line, col);
+            String temp = newTemp();
+            code.add(new IntermediateInstruction("ARRGET", n.name, idx.operand, temp));
             return new ExpressionResult(temp, "REAL");
         }
         if (node instanceof UnaryOpNode) {
@@ -643,8 +679,12 @@ public class Felix {
     private int labelCounter = 0;
     private String newLabel() { return "L" + (++labelCounter); }
 
+    private CodeGeneratorWalker walkerInstance = null;
     private CodeGeneratorWalker walker() {
-        return new CodeGeneratorWalker(symbolTable, semanticErrors, intermediateCode);
+        if (walkerInstance == null) {
+            walkerInstance = new CodeGeneratorWalker(symbolTable, semanticErrors, intermediateCode);
+        }
+        return walkerInstance;
     }
 
     private void initTokenManager() {
@@ -656,8 +696,12 @@ public class Felix {
         String sourceFileName = "entrada";
         boolean readFromStdin = (args.length == 0);
 
+        boolean noExec = false;
         if (args.length > 0) {
             sourceFileName = args[0];
+            if (args.length > 1 && args[1].equalsIgnoreCase("-noexec")) {
+                noExec = true;
+            }
             try {
                 inputStream = new java.io.FileInputStream(args[0]);
             } catch (java.io.FileNotFoundException ex) {
@@ -800,6 +844,7 @@ public class Felix {
             } catch (Exception ex) {
             } finally { if (pwOpt != null) pwOpt.close(); }
 
+            if (!noExec) {
             // --- 4. EJECUTAR LOS CUÁDRUPLES OPTIMIZADOS EN TERMINAL ---
             System.out.println("\n==================================================");
             System.out.println("EJECUCIÓN DEL PROGRAMA");
@@ -821,6 +866,8 @@ public class Felix {
             Map<String, Integer> lblIdx = new HashMap<String, Integer>();
             Map<String, double[][]> matrices = new HashMap<String, double[][]>();
             Map<String, int[]> matDims = new HashMap<String, int[]>();
+            Map<String, double[]> arrays = new HashMap<String, double[]>();
+            Map<String, Integer> arrDims = new HashMap<String, Integer>();
 
             // Pre-indexar etiquetas
             for (int li = 0; li < finalCode.size(); li++) {
@@ -974,26 +1021,58 @@ public class Felix {
                             System.out.println("[Error: Se esperaba un valor numérico para la matriz]");
                         }
                         pc++;
+                    } else if (op.equals("NEWARR")) {
+                        int size = Integer.parseInt(q.arg2);
+                        arrays.put(q.arg1, new double[size]);
+                        arrDims.put(q.arg1, size);
+                        pc++;
+                    } else if (op.equals("ARRSET")) {
+                        int idx = (int) toNum(resolveVal(q.arg1, mem));
+                        double val = toNum(resolveVal(q.arg2, mem));
+                        if (arrays.containsKey(q.result)) arrays.get(q.result)[idx] = val;
+                        pc++;
+                    } else if (op.equals("ARRGET")) {
+                        int idx = (int) toNum(resolveVal(q.arg2, mem));
+                        if (arrays.containsKey(q.arg1)) {
+                            double v = arrays.get(q.arg1)[idx];
+                            if (v == Math.floor(v)) mem.put(q.result, (int)v);
+                            else mem.put(q.result, v);
+                        }
+                        else mem.put(q.result, 0.0);
+                        pc++;
+                    } else if (op.equals("ARRREAD")) {
+                        int idx = (int) toNum(resolveVal(q.arg1, mem));
+                        System.out.print(q.result + "[" + idx + "] = ? ");
+                        System.out.flush();
+                        String input = sc.nextLine().trim();
+                        try {
+                            double val = Double.parseDouble(input);
+                            if (arrays.containsKey(q.result)) arrays.get(q.result)[idx] = val;
+                        } catch (NumberFormatException nfe) {
+                            System.out.println("[Error: Se esperaba un valor num\u00e9rico para el arreglo]");
+                        }
+                        pc++;
                     } else {
-                        pc++; // operación desconocida, saltar
+                        pc++; // operaci\u00f3n desconocida, saltar
                     }
                 } catch (Exception ex) {
-                    System.out.println("[Error de ejecución en instrucción " + pc + ": " + ex.getMessage() + "]");
+                    System.out.println("[Error de ejecuci\u00f3n en instrucci\u00f3n " + pc + ": " + ex.getMessage() + "]");
                     runtimeError = true;
                 }
             }
 
             if (steps >= maxSteps) {
-                System.out.println("\n[Advertencia: Se alcanzó el límite de ejecución (" + maxSteps + " pasos). Posible bucle infinito.]");
+                System.out.println("\n[Advertencia: Se alcanz\u00f3 el l\u00edmite de ejecuci\u00f3n (" + maxSteps + " pasos). Posible bucle infinito.]");
             }
 
             System.out.println("\n==================================================");
-            System.out.println("Ejecución finalizada.");
+            System.out.println("Ejecuci\u00f3n finalizada.");
             System.out.println("==================================================");
+            } // end if (!noExec)
         } 
     } 
 
-    // --- Métodos auxiliares para el intérprete inline ---
+    // --- M\u00e9todos auxiliares para el int\u00e9rprete inline ---
     static Object resolveVal(String s, Map<String, Object> mem) {
         if (s == null) return 0;
         if (s.startsWith("\"") && s.endsWith("\"")) return s;
@@ -1007,9 +1086,7 @@ public class Felix {
     }
 
     static void checkTypeMatch(Object a, Object b) throws Exception {
-        if ((a instanceof Double && b instanceof Integer) || (a instanceof Integer && b instanceof Double)) {
-            throw new Exception("Tipos incompatibles en operación: no se puede combinar REAL e INTEGER");
-        }
+        // Se permite la coacci\u00f3n impl\u00edcita entre REAL e INTEGER
     }
 
     static double toNum(Object val) throws Exception {
@@ -1093,6 +1170,7 @@ TOKEN : {
     < ENDIF:         "ENDIF"       > |
     < NEW:          "NEW"          > |
     < MATRIX:        "MATRIX"      > |
+    < ARRAY:         "ARRAY"       > |
     < AND:          "AND"          > |
     < OR:            "OR"          > |
     < NOT:          "NOT"          > |
@@ -1258,10 +1336,10 @@ void Start() {
 
 void Statement() : {} {
     ( Asignacion() | EscribirTexto() | LeerVariable() | Condicional()
-    | DeclararMatriz() | WhileStatement() | ForStatement() | SwitchStatement() )
+    | LOOKAHEAD(2) DeclararMatriz() | DeclararArreglo() | WhileStatement() | ForStatement() | SwitchStatement() )
 }
 
-void Asignacion() : { Token id; ExprNode tree; int line, col; int errorCountBefore; boolean declaredHere = false; ExprNode rowExpr = null, colExpr = null; } {
+void Asignacion() : { Token id; ExprNode tree; int line, col; int errorCountBefore; boolean declaredHere = false; ExprNode rowExpr = null, colExpr = null, arrIdxExpr = null; } {
     <SET> id=<IDENTIFIER> { 
         line = id.beginLine; col = id.beginColumn; 
         errorCountBefore = syntaxErrors.size() + lexicErrors.size();
@@ -1271,8 +1349,8 @@ void Asignacion() : { Token id; ExprNode tree; int line, col; int errorCountBefo
         }
     }
     (
-        <LBRACKET> Expression() { rowExpr = semanticStack.pop(); } <RBRACKET>
-        <LBRACKET> Expression() { colExpr = semanticStack.pop(); } <RBRACKET>
+        <LBRACKET> Expression() { rowExpr = semanticStack.pop(); arrIdxExpr = rowExpr; } <RBRACKET>
+        ( <LBRACKET> Expression() { colExpr = semanticStack.pop(); } <RBRACKET> )?
     )?
     expectTo() Expression() expectSemicolon() {
         tree = semanticStack.pop();
@@ -1292,6 +1370,16 @@ void Asignacion() : { Token id; ExprNode tree; int line, col; int errorCountBefo
             ExpressionResult r = walker().walk(rowExpr, line, col);
             ExpressionResult c = walker().walk(colExpr, line, col);
             intermediateCode.add(new IntermediateInstruction("MATSET", r.operand + "," + c.operand, res.operand, id.image));
+        } else if (arrIdxExpr != null && colExpr == null) {
+            // Asignación a arreglo
+            if (existing != null && !existing.type.equals("ARRAY")) {
+                semanticErrors.add(new SemanticError(line, col,
+                    "'" + id.image + "' no es un arreglo.",
+                    "Una variable de tipo ARRAY.",
+                    "Use una variable declarada como arreglo."));
+            }
+            ExpressionResult idx = walker().walk(arrIdxExpr, line, col);
+            intermediateCode.add(new IntermediateInstruction("ARRSET", idx.operand, res.operand, id.image));
         } else {
             // Asignación simple
             String varType = res.type;
@@ -1336,20 +1424,34 @@ void DeclararMatriz() : { Token id, d1, d2; } {
             Integer.parseInt(d1.image), Integer.parseInt(d2.image));
         if (!ok) {
             semanticErrors.add(new SemanticError(id.beginLine, id.beginColumn,
-                "Declaración duplicada de matríz '" + id.image + "'.",
-                "Un nombre de matríz no declarado previamente.",
-                "Use un nombre diferente para la matríz."));
+                "Declaracion duplicada de matriz '" + id.image + "'.",
+                "Un nombre de matriz no declarado previamente.",
+                "Use un nombre diferente para la matriz."));
         }
         intermediateCode.add(new IntermediateInstruction("NEWMAT",
             id.image, d1.image + "x" + d2.image, null));
     }
 }
 
-void LeerVariable() : { Token id; ExprNode rowExpr = null, colExpr = null; } {
+void DeclararArreglo() : { Token id, d1; } {
+    <NEW> <ARRAY> id=<IDENTIFIER>
+    <LBRACKET> d1=<INTEGER_LIT> <RBRACKET> expectSemicolon() {
+        boolean ok = symbolTable.addArray(id.image, Integer.parseInt(d1.image));
+        if (!ok) {
+            semanticErrors.add(new SemanticError(id.beginLine, id.beginColumn,
+                "Declaracion duplicada de arreglo '" + id.image + "'.",
+                "Un nombre de arreglo no declarado previamente.",
+                "Use un nombre diferente para el arreglo."));
+        }
+        intermediateCode.add(new IntermediateInstruction("NEWARR", id.image, d1.image, null));
+    }
+}
+
+void LeerVariable() : { Token id; ExprNode rowExpr = null, colExpr = null, arrIdxExpr = null; } {
     <READ> id=<IDENTIFIER> 
     (
-        <LBRACKET> Expression() { rowExpr = semanticStack.pop(); } <RBRACKET>
-        <LBRACKET> Expression() { colExpr = semanticStack.pop(); } <RBRACKET>
+        <LBRACKET> Expression() { rowExpr = semanticStack.pop(); arrIdxExpr = rowExpr; } <RBRACKET>
+        ( <LBRACKET> Expression() { colExpr = semanticStack.pop(); } <RBRACKET> )?
     )?
     expectSemicolon() {
         if (!symbolTable.isDeclared(id.image)) {
@@ -1359,9 +1461,10 @@ void LeerVariable() : { Token id; ExprNode rowExpr = null, colExpr = null; } {
         if (rowExpr != null && colExpr != null) {
             ExpressionResult r = walker().walk(rowExpr, id.beginLine, id.beginColumn);
             ExpressionResult c = walker().walk(colExpr, id.beginLine, id.beginColumn);
-            // Reutilizamos MATSET pero el valor vendrá del input (especial en el intérprete)
-            // Sin embargo, para READ a matriz, lo más limpio es un nuevo cuádruple MATREAD
             intermediateCode.add(new IntermediateInstruction("MATREAD", r.operand + "," + c.operand, null, id.image));
+        } else if (arrIdxExpr != null && colExpr == null) {
+            ExpressionResult idx = walker().walk(arrIdxExpr, id.beginLine, id.beginColumn);
+            intermediateCode.add(new IntermediateInstruction("ARRREAD", idx.operand, null, id.image));
         } else {
             intermediateCode.add(new IntermediateInstruction("READ", null, null, id.image));
         }
@@ -1401,12 +1504,16 @@ void Factor() : { Token t; } {
         semanticStack.push(new UnaryOpNode("NEG", negOperand));
     }
     | LOOKAHEAD(2) t=<IDENTIFIER> <LBRACKET> {
-        ExprNode rowExpr, colExpr;
+        ExprNode rowExpr, colExpr = null;
         Expression(); rowExpr = semanticStack.pop();
-    } <RBRACKET> <LBRACKET> {
+    } <RBRACKET> ( <LBRACKET> {
         Expression(); colExpr = semanticStack.pop();
-    } <RBRACKET> {
-        semanticStack.push(new MatrixAccessNode(t.image, rowExpr, colExpr));
+    } <RBRACKET> )? {
+        if (colExpr != null) {
+            semanticStack.push(new MatrixAccessNode(t.image, rowExpr, colExpr));
+        } else {
+            semanticStack.push(new ArrayAccessNode(t.image, rowExpr));
+        }
     }
     | t=<IDENTIFIER> { semanticStack.push(new VariableNode(t.image)); }
     | <LPAREN> Expression() <RPAREN>
@@ -1468,15 +1575,17 @@ void WhileStatement() : { ExprNode tree; Token t; String lCond, lBody, lEnd; } {
     }
 }
 
-void ForStatement() : { Token id, from, to2; String lCond, lBody, lEnd, condTemp, incTemp; } {
-    <FOR> id=<IDENTIFIER> <ASSIGN_OP> from=<INTEGER_LIT> <TO> to2=<INTEGER_LIT> {
+void ForStatement() : { Token id; ExprNode fromExpr, toExpr; String lCond, lBody, lEnd, condTemp, incTemp; } {
+    <FOR> id=<IDENTIFIER> <ASSIGN_OP> Expression() { fromExpr = semanticStack.pop(); } <TO> Expression() { toExpr = semanticStack.pop(); } {
         symbolTable.addVariable(id.image, "INTEGER");
-        intermediateCode.add(new IntermediateInstruction("=",     from.image,  null,      id.image));
+        ExpressionResult resFrom = walker().walk(fromExpr, id.beginLine, id.beginColumn);
+        ExpressionResult resTo = walker().walk(toExpr, id.beginLine, id.beginColumn);
+        intermediateCode.add(new IntermediateInstruction("=",     resFrom.operand,  null,      id.image));
         lCond = newLabel();
         lBody = newLabel(); lEnd = newLabel();
         condTemp = "t_for_" + id.image; incTemp = "t_inc_" + id.image;
         intermediateCode.add(new IntermediateInstruction("LABEL", null,        null,      lCond));
-        intermediateCode.add(new IntermediateInstruction("<=",    id.image,    to2.image, condTemp));
+        intermediateCode.add(new IntermediateInstruction("<=",    id.image,    resTo.operand, condTemp));
         intermediateCode.add(new IntermediateInstruction("IFT",   condTemp,    null,      lBody));
         intermediateCode.add(new IntermediateInstruction("GOTO",  null,        null,      lEnd));
         intermediateCode.add(new IntermediateInstruction("LABEL", null,        null,      lBody));

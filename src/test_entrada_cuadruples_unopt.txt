@@ -1,0 +1,10 @@
+==================================================
+Codigo sin optimizar
+==================================================
+No.    Operador     Argumento 1    Argumento 2    Resultado   
+--------------------------------------------------
+0      NEWARR       calificaciones 100            -           
+1      =            0.0            -              suma        
+2      READ         -              -              cantidad    
+--------------------------------------------------
+Total de instrucciones: 3

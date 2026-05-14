@@ -1,0 +1,31 @@
+NEW ARRAY fib[100];
+SET fib[0] TO 0;
+SET fib[1] TO 1;
+
+READ inicio;
+READ fin;
+
+FOR i = 2 TO fin
+    SET fib[i] TO fib[i - 1] + fib[i - 2];
+ENDFOR
+
+WRITE "--- SERIE FIBONACCI ---";
+FOR j = inicio TO fin
+    WRITE fib[j];
+ENDFOR
+
+WRITE "--- BUSQUEDA ---";
+READ num_buscar;
+SET encontrado TO 0;
+
+FOR k = inicio TO fin
+    IF fib[k] == num_buscar THEN
+        SET encontrado TO 1;
+    ENDIF
+ENDFOR
+
+IF encontrado == 1 THEN
+    WRITE "El numero SI se encuentra en el rango";
+ELSE
+    WRITE "El numero NO se encuentra en el rango";
+ENDIF

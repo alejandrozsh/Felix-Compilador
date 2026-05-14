@@ -40,6 +40,14 @@ class MatrixAccessNode extends ExprNode {
     }
 }
 
+class ArrayAccessNode extends ExprNode {
+    String name; ExprNode index;
+    public ArrayAccessNode(String name, ExprNode index) {
+        this.name = name;
+        this.index = index; this.type = "PENDING_LOOKUP";
+    }
+}
+
 // ============================================================
 // INTERMEDIATE CODE — QUADRUPLES
 // ============================================================
@@ -377,6 +385,11 @@ class Symbol {
         this.type = "MATRIX"; this.dim1 = d1; this.dim2 = d2;
         this.address = addr; this.scope = scope;
     }
+    public Symbol(String name, int size, int addr, String scope) {
+        this.name = name;
+        this.type = "ARRAY"; this.dim1 = size;
+        this.address = addr; this.scope = scope;
+    }
 }
 
 class MemoryManager {
@@ -407,6 +420,14 @@ class SymbolTable {
         if (table.containsKey(key)) return false;
         int addr = memoryManager.allocate(d1 * d2 * 4);
         table.put(key, new Symbol(name, d1, d2, addr, currentScope));
+        return true;
+    }
+
+    public boolean addArray(String name, int size) {
+        String key = (name + "@" + currentScope).toUpperCase();
+        if (table.containsKey(key)) return false;
+        int addr = memoryManager.allocate(size * 4);
+        table.put(key, new Symbol(name, size, addr, currentScope));
         return true;
     }
 
@@ -497,6 +518,21 @@ class CodeGeneratorWalker {
             ExpressionResult c = walk(n.col, line, col);
             String temp = newTemp();
             code.add(new IntermediateInstruction("MATGET", n.name, r.operand + "," + c.operand, temp));
+            return new ExpressionResult(temp, "REAL");
+        }
+        if (node instanceof ArrayAccessNode) {
+            ArrayAccessNode n = (ArrayAccessNode) node;
+            Symbol s = symbolTable.lookup(n.name);
+            if (s == null) {
+                errors.add(new SemanticError(line, col,
+                    "Arreglo '" + n.name + "' no ha sido declarado.",
+                    "Un arreglo declarado con NEW ARRAY.",
+                    "Declare el arreglo: NEW ARRAY " + n.name + "[tama\u00f1o];"));
+                return new ExpressionResult(n.name, "UNKNOWN");
+            }
+            ExpressionResult idx = walk(n.index, line, col);
+            String temp = newTemp();
+            code.add(new IntermediateInstruction("ARRGET", n.name, idx.operand, temp));
             return new ExpressionResult(temp, "REAL");
         }
         if (node instanceof UnaryOpNode) {
@@ -638,8 +674,12 @@ public class Felix implements FelixConstants {
     private int labelCounter = 0;
     private String newLabel() { return "L" + (++labelCounter); }
 
+    private CodeGeneratorWalker walkerInstance = null;
     private CodeGeneratorWalker walker() {
-        return new CodeGeneratorWalker(symbolTable, semanticErrors, intermediateCode);
+        if (walkerInstance == null) {
+            walkerInstance = new CodeGeneratorWalker(symbolTable, semanticErrors, intermediateCode);
+        }
+        return walkerInstance;
     }
 
     private void initTokenManager() {
@@ -651,8 +691,12 @@ public class Felix implements FelixConstants {
         String sourceFileName = "entrada";
         boolean readFromStdin = (args.length == 0);
 
+        boolean noExec = false;
         if (args.length > 0) {
             sourceFileName = args[0];
+            if (args.length > 1 && args[1].equalsIgnoreCase("-noexec")) {
+                noExec = true;
+            }
             try {
                 inputStream = new java.io.FileInputStream(args[0]);
             } catch (java.io.FileNotFoundException ex) {
@@ -795,6 +839,7 @@ public class Felix implements FelixConstants {
             } catch (Exception ex) {
             } finally { if (pwOpt != null) pwOpt.close(); }
 
+            if (!noExec) {
             // --- 4. EJECUTAR LOS CUÁDRUPLES OPTIMIZADOS EN TERMINAL ---
             System.out.println("\n==================================================");
             System.out.println("EJECUCI\u00d3N DEL PROGRAMA");
@@ -816,6 +861,8 @@ public class Felix implements FelixConstants {
             Map<String, Integer> lblIdx = new HashMap<String, Integer>();
             Map<String, double[][]> matrices = new HashMap<String, double[][]>();
             Map<String, int[]> matDims = new HashMap<String, int[]>();
+            Map<String, double[]> arrays = new HashMap<String, double[]>();
+            Map<String, Integer> arrDims = new HashMap<String, Integer>();
 
             // Pre-indexar etiquetas
             for (int li = 0; li < finalCode.size(); li++) {
@@ -969,6 +1016,37 @@ public class Felix implements FelixConstants {
                             System.out.println("[Error: Se esperaba un valor num\u00e9rico para la matriz]");
                         }
                         pc++;
+                    } else if (op.equals("NEWARR")) {
+                        int size = Integer.parseInt(q.arg2);
+                        arrays.put(q.arg1, new double[size]);
+                        arrDims.put(q.arg1, size);
+                        pc++;
+                    } else if (op.equals("ARRSET")) {
+                        int idx = (int) toNum(resolveVal(q.arg1, mem));
+                        double val = toNum(resolveVal(q.arg2, mem));
+                        if (arrays.containsKey(q.result)) arrays.get(q.result)[idx] = val;
+                        pc++;
+                    } else if (op.equals("ARRGET")) {
+                        int idx = (int) toNum(resolveVal(q.arg2, mem));
+                        if (arrays.containsKey(q.arg1)) {
+                            double v = arrays.get(q.arg1)[idx];
+                            if (v == Math.floor(v)) mem.put(q.result, (int)v);
+                            else mem.put(q.result, v);
+                        }
+                        else mem.put(q.result, 0.0);
+                        pc++;
+                    } else if (op.equals("ARRREAD")) {
+                        int idx = (int) toNum(resolveVal(q.arg1, mem));
+                        System.out.print(q.result + "[" + idx + "] = ? ");
+                        System.out.flush();
+                        String input = sc.nextLine().trim();
+                        try {
+                            double val = Double.parseDouble(input);
+                            if (arrays.containsKey(q.result)) arrays.get(q.result)[idx] = val;
+                        } catch (NumberFormatException nfe) {
+                            System.out.println("[Error: Se esperaba un valor num\u00e9rico para el arreglo]");
+                        }
+                        pc++;
                     } else {
                         pc++; // operación desconocida, saltar
                     }
@@ -985,6 +1063,7 @@ public class Felix implements FelixConstants {
             System.out.println("\n==================================================");
             System.out.println("Ejecuci\u00f3n finalizada.");
             System.out.println("==================================================");
+            } // end if (!noExec)
         }
     }
 
@@ -1002,9 +1081,7 @@ public class Felix implements FelixConstants {
     }
 
     static void checkTypeMatch(Object a, Object b) throws Exception {
-        if ((a instanceof Double && b instanceof Integer) || (a instanceof Integer && b instanceof Double)) {
-            throw new Exception("Tipos incompatibles en operaci\u00f3n: no se puede combinar REAL e INTEGER");
-        }
+        // Se permite la coacción implícita entre REAL e INTEGER
     }
 
     static double toNum(Object val) throws Exception {
@@ -1176,30 +1253,38 @@ Token errTok = e.currentToken != null && e.currentToken.next != null
       Condicional();
       break;
       }
-    case NEW:{
-      DeclararMatriz();
-      break;
-      }
-    case WHILE:{
-      WhileStatement();
-      break;
-      }
-    case FOR:{
-      ForStatement();
-      break;
-      }
-    case SWITCH:{
-      SwitchStatement();
-      break;
-      }
     default:
       jj_la1[0] = jj_gen;
-      jj_consume_token(-1);
-      throw new ParseException();
+      if (jj_2_1(2)) {
+        DeclararMatriz();
+      } else {
+        switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
+        case NEW:{
+          DeclararArreglo();
+          break;
+          }
+        case WHILE:{
+          WhileStatement();
+          break;
+          }
+        case FOR:{
+          ForStatement();
+          break;
+          }
+        case SWITCH:{
+          SwitchStatement();
+          break;
+          }
+        default:
+          jj_la1[1] = jj_gen;
+          jj_consume_token(-1);
+          throw new ParseException();
+        }
+      }
     }
 }
 
-  final public void Asignacion() throws ParseException {Token id; ExprNode tree; int line, col; int errorCountBefore; boolean declaredHere = false; ExprNode rowExpr = null, colExpr = null;
+  final public void Asignacion() throws ParseException {Token id; ExprNode tree; int line, col; int errorCountBefore; boolean declaredHere = false; ExprNode rowExpr = null, colExpr = null, arrIdxExpr = null;
     jj_consume_token(SET);
     id = jj_consume_token(IDENTIFIER);
 line = id.beginLine; col = id.beginColumn;
@@ -1212,16 +1297,24 @@ line = id.beginLine; col = id.beginColumn;
     case LBRACKET:{
       jj_consume_token(LBRACKET);
       Expression();
-rowExpr = semanticStack.pop();
+rowExpr = semanticStack.pop(); arrIdxExpr = rowExpr;
       jj_consume_token(RBRACKET);
-      jj_consume_token(LBRACKET);
-      Expression();
+      switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
+      case LBRACKET:{
+        jj_consume_token(LBRACKET);
+        Expression();
 colExpr = semanticStack.pop();
-      jj_consume_token(RBRACKET);
+        jj_consume_token(RBRACKET);
+        break;
+        }
+      default:
+        jj_la1[2] = jj_gen;
+        ;
+      }
       break;
       }
     default:
-      jj_la1[1] = jj_gen;
+      jj_la1[3] = jj_gen;
       ;
     }
     expectTo();
@@ -1244,6 +1337,16 @@ tree = semanticStack.pop();
             ExpressionResult r = walker().walk(rowExpr, line, col);
             ExpressionResult c = walker().walk(colExpr, line, col);
             intermediateCode.add(new IntermediateInstruction("MATSET", r.operand + "," + c.operand, res.operand, id.image));
+        } else if (arrIdxExpr != null && colExpr == null) {
+            // Asignación a arreglo
+            if (existing != null && !existing.type.equals("ARRAY")) {
+                semanticErrors.add(new SemanticError(line, col,
+                    "'" + id.image + "' no es un arreglo.",
+                    "Una variable de tipo ARRAY.",
+                    "Use una variable declarada como arreglo."));
+            }
+            ExpressionResult idx = walker().walk(arrIdxExpr, line, col);
+            intermediateCode.add(new IntermediateInstruction("ARRSET", idx.operand, res.operand, id.image));
         } else {
             // Asignación simple
             String varType = res.type;
@@ -1280,7 +1383,7 @@ tree = semanticStack.pop();
         break;
         }
       default:
-        jj_la1[2] = jj_gen;
+        jj_la1[4] = jj_gen;
         break label_1;
       }
       jj_consume_token(COMMA);
@@ -1307,31 +1410,57 @@ boolean ok = symbolTable.addMatrix(id.image,
             Integer.parseInt(d1.image), Integer.parseInt(d2.image));
         if (!ok) {
             semanticErrors.add(new SemanticError(id.beginLine, id.beginColumn,
-                "Declaraci\u00f3n duplicada de matr\u00edz '" + id.image + "'.",
-                "Un nombre de matr\u00edz no declarado previamente.",
-                "Use un nombre diferente para la matr\u00edz."));
+                "Declaracion duplicada de matriz '" + id.image + "'.",
+                "Un nombre de matriz no declarado previamente.",
+                "Use un nombre diferente para la matriz."));
         }
         intermediateCode.add(new IntermediateInstruction("NEWMAT",
             id.image, d1.image + "x" + d2.image, null));
 }
 
-  final public void LeerVariable() throws ParseException {Token id; ExprNode rowExpr = null, colExpr = null;
+  final public void DeclararArreglo() throws ParseException {Token id, d1;
+    jj_consume_token(NEW);
+    jj_consume_token(ARRAY);
+    id = jj_consume_token(IDENTIFIER);
+    jj_consume_token(LBRACKET);
+    d1 = jj_consume_token(INTEGER_LIT);
+    jj_consume_token(RBRACKET);
+    expectSemicolon();
+boolean ok = symbolTable.addArray(id.image, Integer.parseInt(d1.image));
+        if (!ok) {
+            semanticErrors.add(new SemanticError(id.beginLine, id.beginColumn,
+                "Declaracion duplicada de arreglo '" + id.image + "'.",
+                "Un nombre de arreglo no declarado previamente.",
+                "Use un nombre diferente para el arreglo."));
+        }
+        intermediateCode.add(new IntermediateInstruction("NEWARR", id.image, d1.image, null));
+}
+
+  final public void LeerVariable() throws ParseException {Token id; ExprNode rowExpr = null, colExpr = null, arrIdxExpr = null;
     jj_consume_token(READ);
     id = jj_consume_token(IDENTIFIER);
     switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
     case LBRACKET:{
       jj_consume_token(LBRACKET);
       Expression();
-rowExpr = semanticStack.pop();
+rowExpr = semanticStack.pop(); arrIdxExpr = rowExpr;
       jj_consume_token(RBRACKET);
-      jj_consume_token(LBRACKET);
-      Expression();
+      switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
+      case LBRACKET:{
+        jj_consume_token(LBRACKET);
+        Expression();
 colExpr = semanticStack.pop();
-      jj_consume_token(RBRACKET);
+        jj_consume_token(RBRACKET);
+        break;
+        }
+      default:
+        jj_la1[5] = jj_gen;
+        ;
+      }
       break;
       }
     default:
-      jj_la1[3] = jj_gen;
+      jj_la1[6] = jj_gen;
       ;
     }
     expectSemicolon();
@@ -1342,9 +1471,10 @@ if (!symbolTable.isDeclared(id.image)) {
         if (rowExpr != null && colExpr != null) {
             ExpressionResult r = walker().walk(rowExpr, id.beginLine, id.beginColumn);
             ExpressionResult c = walker().walk(colExpr, id.beginLine, id.beginColumn);
-            // Reutilizamos MATSET pero el valor vendrá del input (especial en el intérprete)
-            // Sin embargo, para READ a matriz, lo más limpio es un nuevo cuádruple MATREAD
             intermediateCode.add(new IntermediateInstruction("MATREAD", r.operand + "," + c.operand, null, id.image));
+        } else if (arrIdxExpr != null && colExpr == null) {
+            ExpressionResult idx = walker().walk(arrIdxExpr, id.beginLine, id.beginColumn);
+            intermediateCode.add(new IntermediateInstruction("ARRREAD", idx.operand, null, id.image));
         } else {
             intermediateCode.add(new IntermediateInstruction("READ", null, null, id.image));
         }
@@ -1372,7 +1502,7 @@ if (!symbolTable.isDeclared(id.image)) {
         break;
         }
       default:
-        jj_la1[4] = jj_gen;
+        jj_la1[7] = jj_gen;
         break label_2;
       }
       switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
@@ -1417,7 +1547,7 @@ if (!symbolTable.isDeclared(id.image)) {
         break;
         }
       default:
-        jj_la1[5] = jj_gen;
+        jj_la1[8] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
@@ -1438,7 +1568,7 @@ ExprNode r = semanticStack.pop(); ExprNode l = semanticStack.pop();
         break;
         }
       default:
-        jj_la1[6] = jj_gen;
+        jj_la1[9] = jj_gen;
         break label_3;
       }
       switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
@@ -1451,7 +1581,7 @@ ExprNode r = semanticStack.pop(); ExprNode l = semanticStack.pop();
         break;
         }
       default:
-        jj_la1[7] = jj_gen;
+        jj_la1[10] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
@@ -1503,17 +1633,29 @@ ExprNode negOperand = semanticStack.pop();
       break;
       }
     default:
-      jj_la1[8] = jj_gen;
-      if (jj_2_1(2)) {
+      jj_la1[12] = jj_gen;
+      if (jj_2_2(2)) {
         t = jj_consume_token(IDENTIFIER);
         jj_consume_token(LBRACKET);
-ExprNode rowExpr, colExpr;
+ExprNode rowExpr, colExpr = null;
         Expression(); rowExpr = semanticStack.pop();
         jj_consume_token(RBRACKET);
-        jj_consume_token(LBRACKET);
+        switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
+        case LBRACKET:{
+          jj_consume_token(LBRACKET);
 Expression(); colExpr = semanticStack.pop();
-        jj_consume_token(RBRACKET);
-semanticStack.push(new MatrixAccessNode(t.image, rowExpr, colExpr));
+          jj_consume_token(RBRACKET);
+          break;
+          }
+        default:
+          jj_la1[11] = jj_gen;
+          ;
+        }
+if (colExpr != null) {
+            semanticStack.push(new MatrixAccessNode(t.image, rowExpr, colExpr));
+        } else {
+            semanticStack.push(new ArrayAccessNode(t.image, rowExpr));
+        }
       } else {
         switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
         case IDENTIFIER:{
@@ -1528,7 +1670,7 @@ semanticStack.push(new VariableNode(t.image));
           break;
           }
         default:
-          jj_la1[9] = jj_gen;
+          jj_la1[13] = jj_gen;
           jj_consume_token(-1);
           throw new ParseException();
         }
@@ -1571,7 +1713,7 @@ tree = semanticStack.pop();
         break;
         }
       default:
-        jj_la1[10] = jj_gen;
+        jj_la1[14] = jj_gen;
         break label_4;
       }
       SafeStatement();
@@ -1597,7 +1739,7 @@ hasElse = true;
           break;
           }
         default:
-          jj_la1[11] = jj_gen;
+          jj_la1[15] = jj_gen;
           break label_5;
         }
         SafeStatement();
@@ -1606,7 +1748,7 @@ intermediateCode.add(new IntermediateInstruction("LABEL", null, null, lEnd));
       break;
       }
     default:
-      jj_la1[12] = jj_gen;
+      jj_la1[16] = jj_gen;
       ;
     }
     expectEndIf();
@@ -1649,7 +1791,7 @@ tree = semanticStack.pop();
         break;
         }
       default:
-        jj_la1[13] = jj_gen;
+        jj_la1[17] = jj_gen;
         break label_6;
       }
       SafeStatement();
@@ -1659,20 +1801,24 @@ intermediateCode.add(new IntermediateInstruction("GOTO",  null, null, lCond));
         intermediateCode.add(new IntermediateInstruction("LABEL", null, null, lEnd));
 }
 
-  final public void ForStatement() throws ParseException {Token id, from, to2; String lCond, lBody, lEnd, condTemp, incTemp;
+  final public void ForStatement() throws ParseException {Token id; ExprNode fromExpr, toExpr; String lCond, lBody, lEnd, condTemp, incTemp;
     jj_consume_token(FOR);
     id = jj_consume_token(IDENTIFIER);
     jj_consume_token(ASSIGN_OP);
-    from = jj_consume_token(INTEGER_LIT);
+    Expression();
+fromExpr = semanticStack.pop();
     jj_consume_token(TO);
-    to2 = jj_consume_token(INTEGER_LIT);
+    Expression();
+toExpr = semanticStack.pop();
 symbolTable.addVariable(id.image, "INTEGER");
-        intermediateCode.add(new IntermediateInstruction("=",     from.image,  null,      id.image));
+        ExpressionResult resFrom = walker().walk(fromExpr, id.beginLine, id.beginColumn);
+        ExpressionResult resTo = walker().walk(toExpr, id.beginLine, id.beginColumn);
+        intermediateCode.add(new IntermediateInstruction("=",     resFrom.operand,  null,      id.image));
         lCond = newLabel();
         lBody = newLabel(); lEnd = newLabel();
         condTemp = "t_for_" + id.image; incTemp = "t_inc_" + id.image;
         intermediateCode.add(new IntermediateInstruction("LABEL", null,        null,      lCond));
-        intermediateCode.add(new IntermediateInstruction("<=",    id.image,    to2.image, condTemp));
+        intermediateCode.add(new IntermediateInstruction("<=",    id.image,    resTo.operand, condTemp));
         intermediateCode.add(new IntermediateInstruction("IFT",   condTemp,    null,      lBody));
         intermediateCode.add(new IntermediateInstruction("GOTO",  null,        null,      lEnd));
         intermediateCode.add(new IntermediateInstruction("LABEL", null,        null,      lBody));
@@ -1691,7 +1837,7 @@ symbolTable.addVariable(id.image, "INTEGER");
         break;
         }
       default:
-        jj_la1[14] = jj_gen;
+        jj_la1[18] = jj_gen;
         break label_7;
       }
       SafeStatement();
@@ -1722,7 +1868,7 @@ lEnd = newLabel();
         break;
         }
       default:
-        jj_la1[15] = jj_gen;
+        jj_la1[19] = jj_gen;
         break label_8;
       }
       jj_consume_token(CASE);
@@ -1749,7 +1895,7 @@ lCase     = newLabel();
           break;
           }
         default:
-          jj_la1[16] = jj_gen;
+          jj_la1[20] = jj_gen;
           break label_9;
         }
         SafeStatement();
@@ -1776,7 +1922,7 @@ intermediateCode.add(new IntermediateInstruction("LABEL", null, null, newLabel()
           break;
           }
         default:
-          jj_la1[17] = jj_gen;
+          jj_la1[21] = jj_gen;
           break label_10;
         }
         SafeStatement();
@@ -1784,7 +1930,7 @@ intermediateCode.add(new IntermediateInstruction("LABEL", null, null, newLabel()
       break;
       }
     default:
-      jj_la1[18] = jj_gen;
+      jj_la1[22] = jj_gen;
       ;
     }
     jj_consume_token(ENDSWITCH);
@@ -1799,10 +1945,31 @@ intermediateCode.add(new IntermediateInstruction("LABEL", null, null, lEnd));
     finally { jj_save(0, xla); }
   }
 
-  private boolean jj_3_1()
+  private boolean jj_2_2(int xla)
+ {
+    jj_la = xla; jj_lastpos = jj_scanpos = token;
+    try { return (!jj_3_2()); }
+    catch(LookaheadSuccess ls) { return true; }
+    finally { jj_save(1, xla); }
+  }
+
+  private boolean jj_3R_DeclararMatriz_1420_5_11()
+ {
+    if (jj_scan_token(NEW)) return true;
+    if (jj_scan_token(MATRIX)) return true;
+    return false;
+  }
+
+  private boolean jj_3_2()
  {
     if (jj_scan_token(IDENTIFIER)) return true;
     if (jj_scan_token(LBRACKET)) return true;
+    return false;
+  }
+
+  private boolean jj_3_1()
+ {
+    if (jj_3R_DeclararMatriz_1420_5_11()) return true;
     return false;
   }
 
@@ -1817,7 +1984,7 @@ intermediateCode.add(new IntermediateInstruction("LABEL", null, null, lEnd));
   private Token jj_scanpos, jj_lastpos;
   private int jj_la;
   private int jj_gen;
-  final private int[] jj_la1 = new int[19];
+  final private int[] jj_la1 = new int[23];
   static private int[] jj_la1_0;
   static private int[] jj_la1_1;
   static {
@@ -1825,12 +1992,12 @@ intermediateCode.add(new IntermediateInstruction("LABEL", null, null, lEnd));
 	   jj_la1_init_1();
 	}
 	private static void jj_la1_init_0() {
-	   jj_la1_0 = new int[] {0x5204740,0x0,0x0,0x0,0x80030000,0x80030000,0x0,0x0,0x1c0000,0x0,0x5204740,0x5204740,0x1000,0x5204740,0x5204740,0x8000000,0x5204740,0x5204740,0x10000000,};
+	   jj_la1_0 = new int[] {0x740,0xa404000,0x0,0x0,0x0,0x0,0x0,0x60000,0x60000,0x0,0x0,0x0,0x380000,0x0,0xa404740,0xa404740,0x1000,0xa404740,0xa404740,0x10000000,0xa404740,0xa404740,0x20000000,};
 	}
 	private static void jj_la1_init_1() {
-	   jj_la1_1 = new int[] {0x0,0x20,0x4000,0x20,0x1f81,0x1f81,0x6,0x6,0x58001,0x20008,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,};
+	   jj_la1_1 = new int[] {0x0,0x0,0x40,0x40,0x8000,0x40,0x40,0x3f03,0x3f03,0xc,0xc,0x40,0xb0002,0x40010,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,};
 	}
-  final private JJCalls[] jj_2_rtns = new JJCalls[1];
+  final private JJCalls[] jj_2_rtns = new JJCalls[2];
   private boolean jj_rescan = false;
   private int jj_gc = 0;
 
@@ -1845,7 +2012,7 @@ intermediateCode.add(new IntermediateInstruction("LABEL", null, null, lEnd));
 	 token = new Token();
 	 jj_ntk = -1;
 	 jj_gen = 0;
-	 for (int i = 0; i < 19; i++) jj_la1[i] = -1;
+	 for (int i = 0; i < 23; i++) jj_la1[i] = -1;
 	 for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -1860,7 +2027,7 @@ intermediateCode.add(new IntermediateInstruction("LABEL", null, null, lEnd));
 	 token = new Token();
 	 jj_ntk = -1;
 	 jj_gen = 0;
-	 for (int i = 0; i < 19; i++) jj_la1[i] = -1;
+	 for (int i = 0; i < 23; i++) jj_la1[i] = -1;
 	 for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -1871,7 +2038,7 @@ intermediateCode.add(new IntermediateInstruction("LABEL", null, null, lEnd));
 	 token = new Token();
 	 jj_ntk = -1;
 	 jj_gen = 0;
-	 for (int i = 0; i < 19; i++) jj_la1[i] = -1;
+	 for (int i = 0; i < 23; i++) jj_la1[i] = -1;
 	 for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -1890,7 +2057,7 @@ intermediateCode.add(new IntermediateInstruction("LABEL", null, null, lEnd));
 	 token = new Token();
 	 jj_ntk = -1;
 	 jj_gen = 0;
-	 for (int i = 0; i < 19; i++) jj_la1[i] = -1;
+	 for (int i = 0; i < 23; i++) jj_la1[i] = -1;
 	 for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -1900,7 +2067,7 @@ intermediateCode.add(new IntermediateInstruction("LABEL", null, null, lEnd));
 	 token = new Token();
 	 jj_ntk = -1;
 	 jj_gen = 0;
-	 for (int i = 0; i < 19; i++) jj_la1[i] = -1;
+	 for (int i = 0; i < 23; i++) jj_la1[i] = -1;
 	 for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -1910,7 +2077,7 @@ intermediateCode.add(new IntermediateInstruction("LABEL", null, null, lEnd));
 	 token = new Token();
 	 jj_ntk = -1;
 	 jj_gen = 0;
-	 for (int i = 0; i < 19; i++) jj_la1[i] = -1;
+	 for (int i = 0; i < 23; i++) jj_la1[i] = -1;
 	 for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -2041,12 +2208,12 @@ intermediateCode.add(new IntermediateInstruction("LABEL", null, null, lEnd));
   /** Generate ParseException. */
   public ParseException generateParseException() {
 	 jj_expentries.clear();
-	 boolean[] la1tokens = new boolean[52];
+	 boolean[] la1tokens = new boolean[53];
 	 if (jj_kind >= 0) {
 	   la1tokens[jj_kind] = true;
 	   jj_kind = -1;
 	 }
-	 for (int i = 0; i < 19; i++) {
+	 for (int i = 0; i < 23; i++) {
 	   if (jj_la1[i] == jj_gen) {
 		 for (int j = 0; j < 32; j++) {
 		   if ((jj_la1_0[i] & (1<<j)) != 0) {
@@ -2058,7 +2225,7 @@ intermediateCode.add(new IntermediateInstruction("LABEL", null, null, lEnd));
 		 }
 	   }
 	 }
-	 for (int i = 0; i < 52; i++) {
+	 for (int i = 0; i < 53; i++) {
 	   if (la1tokens[i]) {
 		 jj_expentry = new int[1];
 		 jj_expentry[0] = i;
@@ -2092,7 +2259,7 @@ intermediateCode.add(new IntermediateInstruction("LABEL", null, null, lEnd));
 
   private void jj_rescan_token() {
 	 jj_rescan = true;
-	 for (int i = 0; i < 1; i++) {
+	 for (int i = 0; i < 2; i++) {
 	   try {
 		 JJCalls p = jj_2_rtns[i];
 
@@ -2101,6 +2268,7 @@ intermediateCode.add(new IntermediateInstruction("LABEL", null, null, lEnd));
 			 jj_la = p.arg; jj_lastpos = jj_scanpos = p.first;
 			 switch (i) {
 			   case 0: jj_3_1(); break;
+			   case 1: jj_3_2(); break;
 			 }
 		   }
 		   p = p.next;

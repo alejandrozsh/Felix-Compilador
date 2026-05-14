@@ -1,0 +1,40 @@
+==================================================
+Codigo sin optimizar
+==================================================
+No.    Operador     Argumento 1    Argumento 2    Resultado   
+--------------------------------------------------
+0      NEWARR       fib            100            -           
+1      ARRSET       0              0              fib         
+2      ARRSET       1              1              fib         
+3      READ         -              -              inicio      
+4      READ         -              -              fin         
+5      =            2              -              i           
+6      LABEL        -              -              L1          
+7      <=           i              fin            t_for_i     
+8      IFT          t_for_i        -              L2          
+9      GOTO         -              -              L3          
+10     LABEL        -              -              L2          
+11     -            i              1              t1          
+12     ARRGET       fib            t1             t2          
+13     -            i              2              t3          
+14     ARRGET       fib            t3             t4          
+15     +            t2             t4             t5          
+16     ARRSET       i              t5             fib         
+17     +            i              1              t_inc_i     
+18     =            t_inc_i        -              i           
+19     GOTO         -              -              L1          
+20     LABEL        -              -              L3          
+21     =            inicio         -              j           
+22     LABEL        -              -              L4          
+23     <=           j              fin            t_for_j     
+24     IFT          t_for_j        -              L5          
+25     GOTO         -              -              L6          
+26     LABEL        -              -              L5          
+27     ARRGET       fib            j              t1          
+28     WRITE        t1             -              -           
+29     +            j              1              t_inc_j     
+30     =            t_inc_j        -              j           
+31     GOTO         -              -              L4          
+32     LABEL        -              -              L6          
+--------------------------------------------------
+Total de instrucciones: 33

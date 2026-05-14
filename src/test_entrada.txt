@@ -1,0 +1,1 @@
+NEW ARRAY calificaciones[100]; SET suma TO 0.0; READ cantidad;

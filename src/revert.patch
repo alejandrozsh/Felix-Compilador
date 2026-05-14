@@ -1,0 +1,127 @@
+--- Felix.jj
++++ Felix.jj
+@@ -1271,8 +1358,8 @@ void Asignacion() : { Token id; ExprNode tree; int line, col; int errorCountBefo
+         }
+     }
+     (
+-        <LBRACKET> Expression() { rowExpr = semanticStack.pop(); } <RBRACKET>
+-        <LBRACKET> Expression() { colExpr = semanticStack.pop(); } <RBRACKET>
++        <LBRACKET> Expression() { rowExpr = semanticStack.pop(); arrIdxExpr = rowExpr; } <RBRACKET>
++        ( <LBRACKET> Expression() { colExpr = semanticStack.pop(); } <RBRACKET> )?
+     )?
+     expectTo() Expression() expectSemicolon() {
+         tree = semanticStack.pop();
+@@ -1292,6 +1379,16 @@ void Asignacion() : { Token id; ExprNode tree; int line, col; int errorCountBefo
+             ExpressionResult r = walker().walk(rowExpr, line, col);
+             ExpressionResult c = walker().walk(colExpr, line, col);
+             intermediateCode.add(new IntermediateInstruction("MATSET", r.operand + "," + c.operand, res.operand, id.image));
++        } else if (arrIdxExpr != null && colExpr == null) {
++            // Asignación a arreglo
++            if (existing != null && !existing.type.equals("ARRAY")) {
++                semanticErrors.add(new SemanticError(line, col,
++                    "'" + id.image + "' no es un arreglo.",
++                    "Una variable de tipo ARRAY.",
++                    "Use una variable declarada como arreglo."));
++            }
++            ExpressionResult idx = walker().walk(arrIdxExpr, line, col);
++            intermediateCode.add(new IntermediateInstruction("ARRSET", idx.operand, res.operand, id.image));
+         } else {
+             // Asignación simple
+             String varType = res.type;
+@@ -1336,20 +1433,34 @@ void DeclararMatriz() : { Token id, d1, d2; } {
+             Integer.parseInt(d1.image), Integer.parseInt(d2.image));
+         if (!ok) {
+             semanticErrors.add(new SemanticError(id.beginLine, id.beginColumn,
+-                "Declaración duplicada de matríz '" + id.image + "'.",
+-                "Un nombre de matríz no declarado previamente.",
+-                "Use un nombre diferente para la matríz."));
++                "Declaracion duplicada de matriz '" + id.image + "'.",
++                "Un nombre de matriz no declarado previamente.",
++                "Use un nombre diferente para la matriz."));
+         }
+         intermediateCode.add(new IntermediateInstruction("NEWMAT",
+             id.image, d1.image + "x" + d2.image, null));
+     }
+ }
+ 
+-void LeerVariable() : { Token id; ExprNode rowExpr = null, colExpr = null; } {
++void DeclararArreglo() : { Token id, d1; } {
++    <NEW> <ARRAY> id=<IDENTIFIER>
++    <LBRACKET> d1=<INTEGER_LIT> <RBRACKET> expectSemicolon() {
++        boolean ok = symbolTable.addArray(id.image, Integer.parseInt(d1.image));
++        if (!ok) {
++            semanticErrors.add(new SemanticError(id.beginLine, id.beginColumn,
++                "Declaracion duplicada de arreglo '" + id.image + "'.",
++                "Un nombre de arreglo no declarado previamente.",
++                "Use un nombre diferente para el arreglo."));
++        }
++        intermediateCode.add(new IntermediateInstruction("NEWARR", id.image, d1.image, null));
++    }
++}
++
++void LeerVariable() : { Token id; ExprNode rowExpr = null, colExpr = null, arrIdxExpr = null; } {
+     <READ> id=<IDENTIFIER> 
+     (
+-        <LBRACKET> Expression() { rowExpr = semanticStack.pop(); } <RBRACKET>
+-        <LBRACKET> Expression() { colExpr = semanticStack.pop(); } <RBRACKET>
++        <LBRACKET> Expression() { rowExpr = semanticStack.pop(); arrIdxExpr = rowExpr; } <RBRACKET>
++        ( <LBRACKET> Expression() { colExpr = semanticStack.pop(); } <RBRACKET> )?
+     )?
+     expectSemicolon() {
+         if (!symbolTable.isDeclared(id.image)) {
+@@ -1359,9 +1470,10 @@ void LeerVariable() : { Token id; ExprNode rowExpr = null, colExpr = null; } {
+         if (rowExpr != null && colExpr != null) {
+             ExpressionResult r = walker().walk(rowExpr, id.beginLine, id.beginColumn);
+             ExpressionResult c = walker().walk(colExpr, id.beginLine, id.beginColumn);
+-            // Reutilizamos MATSET pero el valor vendrá del input (especial en el intérprete)
+-            // Sin embargo, para READ a matriz, lo más limpio es un nuevo cuádruple MATREAD
+             intermediateCode.add(new IntermediateInstruction("MATREAD", r.operand + "," + c.operand, null, id.image));
++        } else if (arrIdxExpr != null && colExpr == null) {
++            ExpressionResult idx = walker().walk(arrIdxExpr, id.beginLine, id.beginColumn);
++            intermediateCode.add(new IntermediateInstruction("ARRREAD", idx.operand, null, id.image));
+         } else {
+             intermediateCode.add(new IntermediateInstruction("READ", null, null, id.image));
+         }
+@@ -1401,12 +1513,16 @@ void Factor() : { Token t; } {
+         semanticStack.push(new UnaryOpNode("NEG", negOperand));
+     }
+     | LOOKAHEAD(2) t=<IDENTIFIER> <LBRACKET> {
+-        ExprNode rowExpr, colExpr;
++        ExprNode rowExpr, colExpr = null;
+         Expression(); rowExpr = semanticStack.pop();
+-    } <RBRACKET> <LBRACKET> {
++    } <RBRACKET> ( <LBRACKET> {
+         Expression(); colExpr = semanticStack.pop();
+-    } <RBRACKET> {
+-        semanticStack.push(new MatrixAccessNode(t.image, rowExpr, colExpr));
++    } <RBRACKET> )? {
++        if (colExpr != null) {
++            semanticStack.push(new MatrixAccessNode(t.image, rowExpr, colExpr));
++        } else {
++            semanticStack.push(new ArrayAccessNode(t.image, rowExpr));
++        }
+     }
+     | t=<IDENTIFIER> { semanticStack.push(new VariableNode(t.image)); }
+     | <LPAREN> Expression() <RPAREN>
+@@ -1468,15 +1584,17 @@ void WhileStatement() : { ExprNode tree; Token t; String lCond, lBody, lEnd; } {
+     }
+ }
+ 
+-void ForStatement() : { Token id, from, to2; String lCond, lBody, lEnd, condTemp, incTemp; } {
+-    <FOR> id=<IDENTIFIER> <ASSIGN_OP> from=<INTEGER_LIT> <TO> to2=<INTEGER_LIT> {
++void ForStatement() : { Token id; ExprNode fromExpr, toExpr; String lCond, lBody, lEnd, condTemp, incTemp; } {
++    <FOR> id=<IDENTIFIER> <ASSIGN_OP> Expression() { fromExpr = semanticStack.pop(); } <TO> Expression() { toExpr = semanticStack.pop(); } {
+         symbolTable.addVariable(id.image, "INTEGER");
+-        intermediateCode.add(new IntermediateInstruction("=",     from.image,  null,      id.image));
++        ExpressionResult resFrom = walker().walk(fromExpr, id.beginLine, id.beginColumn);
++        ExpressionResult resTo = walker().walk(toExpr, id.beginLine, id.beginColumn);
++        intermediateCode.add(new IntermediateInstruction("=",     resFrom.operand,  null,      id.image));
+         lCond = newLabel();
+         lBody = newLabel(); lEnd = newLabel();
+         condTemp = "t_for_" + id.image; incTemp = "t_inc_" + id.image;
+         intermediateCode.add(new IntermediateInstruction("LABEL", null,        null,      lCond));
+-        intermediateCode.add(new IntermediateInstruction("<=",    id.image,    to2.image, condTemp));
++        intermediateCode.add(new IntermediateInstruction("<=",    id.image,    resTo.operand, condTemp));
+         intermediateCode.add(new IntermediateInstruction("IFT",   condTemp,    null,      lBody));
+         intermediateCode.add(new IntermediateInstruction("GOTO",  null,        null,      lEnd));
+         intermediateCode.add(new IntermediateInstruction("LABEL", null,        null,      lBody));

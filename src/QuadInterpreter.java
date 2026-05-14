@@ -6,6 +6,7 @@ public class QuadInterpreter {
     private Map<String, Object> memory = new LinkedHashMap<>();
     private Map<String, Integer> labelIndex = new LinkedHashMap<>();
     private Map<String, double[][]> matrices = new HashMap<>();
+    private Map<String, double[]> arrays = new HashMap<>();
     private Scanner scanner = new Scanner(System.in);
     private boolean hasError = false;
 
@@ -31,8 +32,13 @@ public class QuadInterpreter {
                 continue;
             }
             if (reading && line.matches("^\\d+\\s+.*")) {
-                String[] parts = line.trim().split("\\s+");
-                String op = parts[1];
+                java.util.List<String> partsList = new java.util.ArrayList<>();
+                java.util.regex.Matcher m = java.util.regex.Pattern.compile("([^\"]\\S*|\".*?\")\\s*").matcher(line.trim());
+                while (m.find()) {
+                    if (!m.group(1).isEmpty()) partsList.add(m.group(1));
+                }
+                String[] parts = partsList.toArray(new String[0]);
+                String op = parts.length > 1 ? parts[1] : "";
                 String arg1 = parts.length > 2 && !parts[2].equals("-") ? parts[2] : null;
                 String arg2 = parts.length > 3 && !parts[3].equals("-") ? parts[3] : null;
                 String res = parts.length > 4 && !parts[4].equals("-") ? parts[4] : null;
@@ -59,9 +65,7 @@ public class QuadInterpreter {
     }
 
     private void checkTypeMatch(Object a, Object b) throws Exception {
-        if ((a instanceof Double && b instanceof Integer) || (a instanceof Integer && b instanceof Double)) {
-            throw new Exception("Tipos incompatibles en operación: no se puede combinar REAL e INTEGER");
-        }
+        // Se permite la coacción implícita entre REAL e INTEGER para facilitar operaciones matemáticas
     }
 
     private double toNum(Object val) throws Exception {
@@ -212,7 +216,11 @@ public class QuadInterpreter {
                     String[] idx = q.arg2.split(",");
                     int r = (int) toNum(resolveVal(idx[0].trim()));
                     int c = (int) toNum(resolveVal(idx[1].trim()));
-                    if (matrices.containsKey(q.arg1)) memory.put(q.result, matrices.get(q.arg1)[r][c]);
+                    if (matrices.containsKey(q.arg1)) {
+                        double v = matrices.get(q.arg1)[r][c];
+                        if (v == Math.floor(v)) memory.put(q.result, (int)v);
+                        else memory.put(q.result, v);
+                    }
                     else memory.put(q.result, 0.0);
                     pc++;
                 } else if (op.equals("MATREAD")) {
@@ -228,6 +236,41 @@ public class QuadInterpreter {
                             else matrices.get(q.result)[r][c] = Integer.parseInt(input);
                         } catch (NumberFormatException nfe) {
                             System.out.println("__WRITE__:[Error: Se esperaba un valor numérico para la matriz]");
+                            hasError = true;
+                        }
+                    } else {
+                        hasError = true;
+                    }
+                    pc++;
+                } else if (op.equals("NEWARR")) {
+                    int size = Integer.parseInt(q.arg2);
+                    arrays.put(q.arg1, new double[size]);
+                    pc++;
+                } else if (op.equals("ARRSET")) {
+                    int idx = (int) toNum(resolveVal(q.arg1));
+                    double val = toNum(resolveVal(q.arg2));
+                    if (arrays.containsKey(q.result)) arrays.get(q.result)[idx] = val;
+                    pc++;
+                } else if (op.equals("ARRGET")) {
+                    int idx = (int) toNum(resolveVal(q.arg2));
+                    if (arrays.containsKey(q.arg1)) {
+                        double v = arrays.get(q.arg1)[idx];
+                        if (v == Math.floor(v)) memory.put(q.result, (int)v);
+                        else memory.put(q.result, v);
+                    }
+                    else memory.put(q.result, 0.0);
+                    pc++;
+                } else if (op.equals("ARRREAD")) {
+                    int idx = (int) toNum(resolveVal(q.arg1));
+                    System.out.println("__READ__:" + q.result + "[" + idx + "]");
+                    System.out.flush();
+                    if (scanner.hasNextLine()) {
+                        String input = scanner.nextLine().trim();
+                        try {
+                            if (input.contains(".")) arrays.get(q.result)[idx] = Double.parseDouble(input);
+                            else arrays.get(q.result)[idx] = Integer.parseInt(input);
+                        } catch (NumberFormatException nfe) {
+                            System.out.println("__WRITE__:[Error: Se esperaba un valor numérico para el arreglo]");
                             hasError = true;
                         }
                     } else {

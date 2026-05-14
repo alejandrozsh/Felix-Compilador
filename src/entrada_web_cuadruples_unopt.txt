@@ -3,26 +3,88 @@ Codigo sin optimizar
 ==================================================
 No.    Operador     Argumento 1    Argumento 2    Resultado   
 --------------------------------------------------
-0      NEWMAT       mat            2x2            -           
-1      WRITE        "Valor 0,0"    -              -           
-2      MATREAD      0,0            -              mat         
-3      WRITE        "Valor 0,1"    -              -           
-4      MATREAD      0,1            -              mat         
-5      WRITE        "Valor 1,0"    -              -           
-6      MATREAD      1,0            -              mat         
-7      WRITE        "Valor 1,1"    -              -           
-8      MATREAD      1,1            -              mat         
-9      MATGET       mat            0,0            t1          
-10     MATGET       mat            0,1            t2          
-11     +            t1             t2             t3          
-12     =            t3             -              suma        
-13     MATGET       mat            1,0            t1          
-14     +            suma           t1             t2          
-15     =            t2             -              suma        
-16     MATGET       mat            1,1            t1          
-17     +            suma           t1             t2          
-18     =            t2             -              suma        
-19     WRITE        "Resultado:"   -              -           
-20     WRITE        suma           -              -           
+0      NEWARR       nombres        100            -           
+1      NEWARR       calificaciones 100            -           
+2      =            0.0            -              suma        
+3      NEG          1.0            -              t1          
+4      =            t1             -              mayor       
+5      =            101.0          -              menor       
+6      WRITE        "Cantidad de alumnos:" -              -           
+7      READ         -              -              cantidad    
+8      -            cantidad       1              t2          
+9      =            0              -              i           
+10     LABEL        -              -              L1          
+11     <=           i              t2             t_for_i     
+12     IFT          t_for_i        -              L2          
+13     GOTO         -              -              L3          
+14     LABEL        -              -              L2          
+15     WRITE        "Nombre del alumno:" -              -           
+16     ARRREAD      i              -              nombres     
+17     WRITE        "Calificacion:" -              -           
+18     ARRREAD      i              -              calificaciones
+19     ARRGET       calificaciones i              t3          
+20     +            suma           t3             t4          
+21     =            t4             -              suma        
+22     ARRGET       calificaciones i              t5          
+23     >            t5             mayor          t6          
+24     IFT          t6             -              L4          
+25     GOTO         -              -              L5          
+26     LABEL        -              -              L4          
+27     ARRGET       calificaciones i              t7          
+28     =            t7             -              mayor       
+29     ARRGET       nombres        i              t8          
+30     =            t8             -              nombreMayor 
+31     LABEL        -              -              L5          
+32     ARRGET       calificaciones i              t9          
+33     <            t9             menor          t10         
+34     IFT          t10            -              L7          
+35     GOTO         -              -              L8          
+36     LABEL        -              -              L7          
+37     ARRGET       calificaciones i              t11         
+38     =            t11            -              menor       
+39     ARRGET       nombres        i              t12         
+40     =            t12            -              nombreMenor 
+41     LABEL        -              -              L8          
+42     +            i              1              t_inc_i     
+43     =            t_inc_i        -              i           
+44     GOTO         -              -              L1          
+45     LABEL        -              -              L3          
+46     /            suma           cantidad       t13         
+47     =            t13            -              promedio    
+48     WRITE        "Promedio general: " -              -           
+49     WRITE        promedio       -              -           
+50     WRITE        "Mayor calificacion:" -              -           
+51     WRITE        nombreMayor    -              -           
+52     WRITE        " -> "         -              -           
+53     WRITE        mayor          -              -           
+54     WRITE        "Menor calificacion:" -              -           
+55     WRITE        nombreMenor    -              -           
+56     WRITE        " -> "         -              -           
+57     WRITE        menor          -              -           
+58     -            cantidad       1              t14         
+59     =            0              -              j           
+60     LABEL        -              -              L10         
+61     <=           j              t14            t_for_j     
+62     IFT          t_for_j        -              L11         
+63     GOTO         -              -              L12         
+64     LABEL        -              -              L11         
+65     ARRGET       calificaciones j              t15         
+66     >=           t15            70.0           t16         
+67     IFT          t16            -              L13         
+68     GOTO         -              -              L14         
+69     LABEL        -              -              L13         
+70     ARRGET       nombres        j              t17         
+71     WRITE        t17            -              -           
+72     WRITE        " APROBADO"    -              -           
+73     GOTO         -              -              L15         
+74     LABEL        -              -              L14         
+75     ARRGET       nombres        j              t18         
+76     WRITE        t18            -              -           
+77     WRITE        " REPROBADO"   -              -           
+78     LABEL        -              -              L15         
+79     +            j              1              t_inc_j     
+80     =            t_inc_j        -              j           
+81     GOTO         -              -              L10         
+82     LABEL        -              -              L12         
 --------------------------------------------------
-Total de instrucciones: 21
+Total de instrucciones: 83

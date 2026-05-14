@@ -1,0 +1,68 @@
+==================================================
+Codigo optimizado
+==================================================
+No.    Operador     Argumento 1    Argumento 2    Resultado   
+--------------------------------------------------
+0      NEWARR       fib            100            -           
+1      ARRSET       0              0              fib         
+2      ARRSET       1              1              fib         
+3      READ         -              -              inicio      
+4      READ         -              -              fin         
+5      =            2              -              i           
+6      LABEL        -              -              L1          
+7      <=           i              fin            t_for_i     
+8      IFT          t_for_i        -              L2          
+9      GOTO         -              -              L3          
+10     LABEL        -              -              L2          
+11     -            i              1              t1          
+12     ARRGET       fib            t1             t2          
+13     -            i              2              t3          
+14     ARRGET       fib            t3             t4          
+15     +            t2             t4             t5          
+16     ARRSET       i              t5             fib         
+17     +            i              1              i           
+18     GOTO         -              -              L1          
+19     LABEL        -              -              L3          
+20     WRITE        "--- SERIE FIBONACCI ---" -              -           
+21     =            inicio         -              j           
+22     LABEL        -              -              L4          
+23     <=           j              fin            t_for_j     
+24     IFT          t_for_j        -              L5          
+25     GOTO         -              -              L6          
+26     LABEL        -              -              L5          
+27     ARRGET       fib            j              t6          
+28     WRITE        t6             -              -           
+29     +            j              1              j           
+30     GOTO         -              -              L4          
+31     LABEL        -              -              L6          
+32     WRITE        "--- BUSQUEDA ---" -              -           
+33     READ         -              -              num_buscar  
+34     =            0              -              encontrado  
+35     =            inicio         -              k           
+36     =            1              -              encontrado  
+37     LABEL        -              -              L7          
+38     <=           k              fin            t_for_k     
+39     IFT          t_for_k        -              L8          
+40     GOTO         -              -              L9          
+41     LABEL        -              -              L8          
+42     ARRGET       fib            k              t7          
+43     ==           t7             num_buscar     t8          
+44     IFT          t8             -              L10         
+45     GOTO         -              -              L11         
+46     LABEL        -              -              L10         
+47     LABEL        -              -              L11         
+48     +            k              1              k           
+49     GOTO         -              -              L7          
+50     LABEL        -              -              L9          
+51     ==           encontrado     1              t9          
+52     IFT          t9             -              L13         
+53     GOTO         -              -              L14         
+54     LABEL        -              -              L13         
+55     WRITE        "El numero SI se encuentra en el rango" -              -           
+56     GOTO         -              -              L15         
+57     LABEL        -              -              L14         
+58     WRITE        "El numero NO se encuentra en el rango" -              -           
+59     LABEL        -              -              L15         
+--------------------------------------------------
+Total de instrucciones: 60
+==================================================

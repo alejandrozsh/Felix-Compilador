@@ -1,0 +1,70 @@
+==================================================
+Codigo sin optimizar
+==================================================
+No.    Operador     Argumento 1    Argumento 2    Resultado   
+--------------------------------------------------
+0      NEWARR       fib            100            -           
+1      ARRSET       0              0              fib         
+2      ARRSET       1              1              fib         
+3      READ         -              -              inicio      
+4      READ         -              -              fin         
+5      =            2              -              i           
+6      LABEL        -              -              L1          
+7      <=           i              fin            t_for_i     
+8      IFT          t_for_i        -              L2          
+9      GOTO         -              -              L3          
+10     LABEL        -              -              L2          
+11     -            i              1              t1          
+12     ARRGET       fib            t1             t2          
+13     -            i              2              t3          
+14     ARRGET       fib            t3             t4          
+15     +            t2             t4             t5          
+16     ARRSET       i              t5             fib         
+17     +            i              1              t_inc_i     
+18     =            t_inc_i        -              i           
+19     GOTO         -              -              L1          
+20     LABEL        -              -              L3          
+21     WRITE        "--- SERIE FIBONACCI ---" -              -           
+22     =            inicio         -              j           
+23     LABEL        -              -              L4          
+24     <=           j              fin            t_for_j     
+25     IFT          t_for_j        -              L5          
+26     GOTO         -              -              L6          
+27     LABEL        -              -              L5          
+28     ARRGET       fib            j              t6          
+29     WRITE        t6             -              -           
+30     +            j              1              t_inc_j     
+31     =            t_inc_j        -              j           
+32     GOTO         -              -              L4          
+33     LABEL        -              -              L6          
+34     WRITE        "--- BUSQUEDA ---" -              -           
+35     READ         -              -              num_buscar  
+36     =            0              -              encontrado  
+37     =            inicio         -              k           
+38     LABEL        -              -              L7          
+39     <=           k              fin            t_for_k     
+40     IFT          t_for_k        -              L8          
+41     GOTO         -              -              L9          
+42     LABEL        -              -              L8          
+43     ARRGET       fib            k              t7          
+44     ==           t7             num_buscar     t8          
+45     IFT          t8             -              L10         
+46     GOTO         -              -              L11         
+47     LABEL        -              -              L10         
+48     =            1              -              encontrado  
+49     LABEL        -              -              L11         
+50     +            k              1              t_inc_k     
+51     =            t_inc_k        -              k           
+52     GOTO         -              -              L7          
+53     LABEL        -              -              L9          
+54     ==           encontrado     1              t9          
+55     IFT          t9             -              L13         
+56     GOTO         -              -              L14         
+57     LABEL        -              -              L13         
+58     WRITE        "El numero SI se encuentra en el rango" -              -           
+59     GOTO         -              -              L15         
+60     LABEL        -              -              L14         
+61     WRITE        "El numero NO se encuentra en el rango" -              -           
+62     LABEL        -              -              L15         
+--------------------------------------------------
+Total de instrucciones: 63

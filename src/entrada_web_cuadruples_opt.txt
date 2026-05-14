@@ -3,24 +3,79 @@ Codigo optimizado
 ==================================================
 No.    Operador     Argumento 1    Argumento 2    Resultado   
 --------------------------------------------------
-0      NEWMAT       mat            2x2            -           
-1      WRITE        "Valor 0,0"    -              -           
-2      MATREAD      0,0            -              mat         
-3      WRITE        "Valor 0,1"    -              -           
-4      MATREAD      0,1            -              mat         
-5      WRITE        "Valor 1,0"    -              -           
-6      MATREAD      1,0            -              mat         
-7      WRITE        "Valor 1,1"    -              -           
-8      MATREAD      1,1            -              mat         
-9      MATGET       mat            0,0            t1          
-10     MATGET       mat            0,1            t2          
-11     +            t1             t2             suma        
-12     MATGET       mat            1,0            t1          
-13     +            suma           t1             suma        
-14     MATGET       mat            1,1            t1          
-15     +            suma           t1             suma        
-16     WRITE        "Resultado:"   -              -           
-17     WRITE        suma           -              -           
+0      NEWARR       nombres        100            -           
+1      NEWARR       calificaciones 100            -           
+2      =            0.0            -              suma        
+3      NEG          1.0            -              mayor       
+4      =            101.0          -              menor       
+5      WRITE        "Cantidad de alumnos:" -              -           
+6      READ         -              -              cantidad    
+7      -            cantidad       1              t2          
+8      =            0              -              i           
+9      LABEL        -              -              L1          
+10     <=           i              t2             t_for_i     
+11     IFT          t_for_i        -              L2          
+12     GOTO         -              -              L3          
+13     LABEL        -              -              L2          
+14     WRITE        "Nombre del alumno:" -              -           
+15     ARRREAD      i              -              nombres     
+16     WRITE        "Calificacion:" -              -           
+17     ARRREAD      i              -              calificaciones
+18     ARRGET       calificaciones i              t3          
+19     +            suma           t3             suma        
+20     >            t3             mayor          t6          
+21     IFT          t6             -              L4          
+22     GOTO         -              -              L5          
+23     LABEL        -              -              L4          
+24     ARRGET       calificaciones i              mayor       
+25     ARRGET       nombres        i              nombreMayor 
+26     LABEL        -              -              L5          
+27     ARRGET       calificaciones i              t9          
+28     <            t9             menor          t10         
+29     IFT          t10            -              L7          
+30     GOTO         -              -              L8          
+31     LABEL        -              -              L7          
+32     ARRGET       calificaciones i              menor       
+33     ARRGET       nombres        i              nombreMenor 
+34     LABEL        -              -              L8          
+35     +            i              1              i           
+36     GOTO         -              -              L1          
+37     LABEL        -              -              L3          
+38     /            suma           cantidad       promedio    
+39     WRITE        "Promedio general: " -              -           
+40     WRITE        promedio       -              -           
+41     WRITE        "Mayor calificacion:" -              -           
+42     WRITE        nombreMayor    -              -           
+43     WRITE        " -> "         -              -           
+44     WRITE        mayor          -              -           
+45     WRITE        "Menor calificacion:" -              -           
+46     WRITE        nombreMenor    -              -           
+47     WRITE        " -> "         -              -           
+48     WRITE        menor          -              -           
+49     -            cantidad       1              t14         
+50     =            0              -              j           
+51     LABEL        -              -              L10         
+52     <=           j              t14            t_for_j     
+53     IFT          t_for_j        -              L11         
+54     GOTO         -              -              L12         
+55     LABEL        -              -              L11         
+56     ARRGET       calificaciones j              t15         
+57     >=           t15            70.0           t16         
+58     IFT          t16            -              L13         
+59     GOTO         -              -              L14         
+60     LABEL        -              -              L13         
+61     ARRGET       nombres        j              t17         
+62     WRITE        t17            -              -           
+63     WRITE        " APROBADO"    -              -           
+64     GOTO         -              -              L15         
+65     LABEL        -              -              L14         
+66     ARRGET       nombres        j              t18         
+67     WRITE        t18            -              -           
+68     WRITE        " REPROBADO"   -              -           
+69     LABEL        -              -              L15         
+70     +            j              1              j           
+71     GOTO         -              -              L10         
+72     LABEL        -              -              L12         
 --------------------------------------------------
-Total de instrucciones: 18
+Total de instrucciones: 73
 ==================================================

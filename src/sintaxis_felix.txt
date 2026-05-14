@@ -1,0 +1,110 @@
+=== DOCUMENTACION DE SINTAXIS DEL LENGUAJE FELIX ===
+
+Felix es un lenguaje de programación procedimental estructurado, fuertemente tipado en ejecución.
+Utiliza punto y coma (;) para finalizar las instrucciones y tiene palabras reservadas en mayúsculas.
+
+1. VARIABLES Y ENTRADA/SALIDA (I/O)
+------------------------------------
+- Asignación de variables: Se utiliza la palabra reservada SET y TO. No es necesario declarar el tipo de dato, se infiere (Integer, Real, Boolean o String).
+    SET x TO 10;
+    SET pi TO 3.14159;
+    SET bandera TO TRUE;
+
+- Entrada de datos: Lee un valor del teclado y lo guarda en la variable.
+    READ x;
+
+- Salida de datos: Imprime en pantalla, permite concatenar con comas o escribir cadenas literales.
+    WRITE "El valor es: ", x;
+
+2. OPERACIONES
+------------------------------------
+- Matemáticas: +, -, *, /, % (módulo), NEG (negación unaria usando -).
+- Relacionales: ==, !=, <, >, <=, >=
+- Lógicas: AND, OR, NOT
+    SET resultado TO (x > 5) AND (y < 10);
+
+3. ESTRUCTURAS DE CONTROL
+------------------------------------
+a) Condicional IF - ELSE
+    IF x == 10 THEN
+        WRITE "Es diez";
+    ELSE
+        WRITE "No es diez";
+    ENDIF
+
+b) Ciclo WHILE
+    WHILE (x < 10) DO
+        SET x TO x + 1;
+    ENDWHILE
+
+c) Ciclo FOR (Dinámico)
+El ciclo FOR es dinámico y acepta tanto números directos como variables o expresiones para sus límites.
+    READ inicio;
+    READ fin;
+    FOR i = inicio TO fin + 2
+        WRITE i;
+    ENDFOR
+
+d) Estructura SWITCH
+Evalúa una variable numérica y ejecuta el caso correspondiente.
+    SWITCH opcion
+    CASE 1
+        WRITE "Opcion 1";
+    CASE 2
+        WRITE "Opcion 2";
+    DEFAULT_CASE
+        WRITE "Opcion no valida";
+    ENDSWITCH
+
+4. ESTRUCTURAS DE DATOS
+------------------------------------
+a) Arreglos Unidimensionales (ARRAY)
+Se deben declarar al principio definiendo un tamaño fijo (entero), pero después se puede acceder dinámicamente mediante variables.
+    NEW ARRAY mi_arreglo[100];
+    SET mi_arreglo[0] TO 5;      // Asignar
+    READ mi_arreglo[1];          // Leer desde teclado a la posición
+    WRITE mi_arreglo[0];         // Imprimir posición
+
+b) Matrices Bidimensionales (MATRIX)
+Similar a los arreglos pero en dos dimensiones.
+    NEW MATRIX mi_matriz[3][3];
+    SET mi_matriz[0][1] TO 10;
+    READ mi_matriz[1][2];
+    WRITE mi_matriz[0][1];
+
+5. EJEMPLO COMPLETO: SERIE DE FIBONACCI CON BUSQUEDA (ARRAYS Y CICLOS DINAMICOS)
+--------------------------------------------------------------------------------
+Este ejemplo muestra todo el poder de Felix combinando arreglos unidimensionales,
+ciclos con límites definidos por el usuario y condicionales.
+
+NEW ARRAY fib[100];
+SET fib[0] TO 0;
+SET fib[1] TO 1;
+
+READ inicio;
+READ fin;
+
+FOR i = 2 TO fin
+    SET fib[i] TO fib[i - 1] + fib[i - 2];
+ENDFOR
+
+WRITE "--- SERIE FIBONACCI ---";
+FOR j = inicio TO fin
+    WRITE fib[j];
+ENDFOR
+
+WRITE "--- BUSQUEDA ---";
+READ num_buscar;
+SET encontrado TO 0;
+
+FOR k = inicio TO fin
+    IF fib[k] == num_buscar THEN
+        SET encontrado TO 1;
+    ENDIF
+ENDFOR
+
+IF encontrado == 1 THEN
+    WRITE "El numero SI se encuentra en el rango";
+ELSE
+    WRITE "El numero NO se encuentra en el rango";
+ENDIF

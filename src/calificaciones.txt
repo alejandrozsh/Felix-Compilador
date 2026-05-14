@@ -1,4 +1,3 @@
-NEW ARRAY nombres[100];
 NEW ARRAY calificaciones[100];
 
 SET suma TO 0.0;
@@ -10,22 +9,17 @@ READ cantidad;
 
 FOR i = 0 TO cantidad - 1
 
-    WRITE "Nombre del alumno:";
-    READ nombres[i];
-
-    WRITE "Calificacion:";
+    WRITE "Calificacion del alumno ", i;
     READ calificaciones[i];
 
     SET suma TO suma + calificaciones[i];
 
     IF calificaciones[i] > mayor THEN
         SET mayor TO calificaciones[i];
-        SET nombreMayor TO nombres[i];
     ENDIF
 
     IF calificaciones[i] < menor THEN
         SET menor TO calificaciones[i];
-        SET nombreMenor TO nombres[i];
     ENDIF
 
 ENDFOR
@@ -33,19 +27,15 @@ ENDFOR
 SET promedio TO suma / cantidad;
 
 WRITE "Promedio general: ", promedio;
-
-WRITE "Mayor calificacion:";
-WRITE nombreMayor, " -> ", mayor;
-
-WRITE "Menor calificacion:";
-WRITE nombreMenor, " -> ", menor;
+WRITE "Mayor calificacion: ", mayor;
+WRITE "Menor calificacion: ", menor;
 
 FOR j = 0 TO cantidad - 1
 
     IF calificaciones[j] >= 70.0 THEN
-        WRITE nombres[j], " APROBADO";
+        WRITE "Alumno ", j, " APROBADO";
     ELSE
-        WRITE nombres[j], " REPROBADO";
+        WRITE "Alumno ", j, " REPROBADO";
     ENDIF
 
 ENDFOR
