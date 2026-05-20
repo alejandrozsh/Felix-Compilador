@@ -3,88 +3,176 @@ Codigo sin optimizar
 ==================================================
 No.    Operador     Argumento 1    Argumento 2    Resultado   
 --------------------------------------------------
-0      NEWARR       nombres        100            -           
-1      NEWARR       calificaciones 100            -           
-2      =            0.0            -              suma        
-3      NEG          1.0            -              t1          
-4      =            t1             -              mayor       
-5      =            101.0          -              menor       
-6      WRITE        "Cantidad de alumnos:" -              -           
-7      READ         -              -              cantidad    
-8      -            cantidad       1              t2          
-9      =            0              -              i           
-10     LABEL        -              -              L1          
-11     <=           i              t2             t_for_i     
-12     IFT          t_for_i        -              L2          
-13     GOTO         -              -              L3          
-14     LABEL        -              -              L2          
-15     WRITE        "Nombre del alumno:" -              -           
-16     ARRREAD      i              -              nombres     
-17     WRITE        "Calificacion:" -              -           
-18     ARRREAD      i              -              calificaciones
-19     ARRGET       calificaciones i              t3          
-20     +            suma           t3             t4          
-21     =            t4             -              suma        
-22     ARRGET       calificaciones i              t5          
-23     >            t5             mayor          t6          
-24     IFT          t6             -              L4          
-25     GOTO         -              -              L5          
-26     LABEL        -              -              L4          
-27     ARRGET       calificaciones i              t7          
-28     =            t7             -              mayor       
-29     ARRGET       nombres        i              t8          
-30     =            t8             -              nombreMayor 
-31     LABEL        -              -              L5          
-32     ARRGET       calificaciones i              t9          
-33     <            t9             menor          t10         
-34     IFT          t10            -              L7          
-35     GOTO         -              -              L8          
-36     LABEL        -              -              L7          
-37     ARRGET       calificaciones i              t11         
-38     =            t11            -              menor       
-39     ARRGET       nombres        i              t12         
-40     =            t12            -              nombreMenor 
-41     LABEL        -              -              L8          
-42     +            i              1              t_inc_i     
-43     =            t_inc_i        -              i           
-44     GOTO         -              -              L1          
-45     LABEL        -              -              L3          
-46     /            suma           cantidad       t13         
-47     =            t13            -              promedio    
-48     WRITE        "Promedio general: " -              -           
-49     WRITE        promedio       -              -           
-50     WRITE        "Mayor calificacion:" -              -           
-51     WRITE        nombreMayor    -              -           
-52     WRITE        " -> "         -              -           
-53     WRITE        mayor          -              -           
-54     WRITE        "Menor calificacion:" -              -           
-55     WRITE        nombreMenor    -              -           
-56     WRITE        " -> "         -              -           
-57     WRITE        menor          -              -           
-58     -            cantidad       1              t14         
-59     =            0              -              j           
-60     LABEL        -              -              L10         
-61     <=           j              t14            t_for_j     
-62     IFT          t_for_j        -              L11         
+0      NEWARR       claves         100            -           
+1      NEWARR       precios        100            -           
+2      NEWARR       stock          100            -           
+3      =            0              -              cantidad    
+4      =            0              -              opcion      
+5      LABEL        -              -              L1          
+6      !=           opcion         5              t1          
+7      IFT          t1             -              L3          
+8      GOTO         -              -              L2          
+9      LABEL        -              -              L3          
+10     WRITE        "===== INVENTARIO =====" -              -           
+11     WRITE        "1. Agregar producto" -              -           
+12     WRITE        "2. Mostrar productos" -              -           
+13     WRITE        "3. Buscar producto" -              -           
+14     WRITE        "4. Vender producto" -              -           
+15     WRITE        "5. Salir"     -              -           
+16     READ         -              -              opcion      
+17     ==           opcion         1              t_sw        
+18     IFT          t_sw           -              L5          
+19     GOTO         -              -              L6          
+20     LABEL        -              -              L5          
+21     WRITE        "Clave del producto:" -              -           
+22     ARRREAD      cantidad       -              claves      
+23     WRITE        "Precio:"      -              -           
+24     ARRREAD      cantidad       -              precios     
+25     WRITE        "Stock:"       -              -           
+26     ARRREAD      cantidad       -              stock       
+27     +            cantidad       1              t2          
+28     =            t2             -              cantidad    
+29     WRITE        "Producto agregado" -              -           
+30     GOTO         -              -              L4          
+31     LABEL        -              -              L6          
+32     ==           opcion         2              t_sw        
+33     IFT          t_sw           -              L7          
+34     GOTO         -              -              L8          
+35     LABEL        -              -              L7          
+36     ==           cantidad       0              t3          
+37     IFT          t3             -              L9          
+38     GOTO         -              -              L10         
+39     LABEL        -              -              L9          
+40     WRITE        "Inventario vacio" -              -           
+41     GOTO         -              -              L11         
+42     LABEL        -              -              L10         
+43     -            cantidad       1              t4          
+44     =            0              -              i           
+45     LABEL        -              -              L12         
+46     <=           i              t4             t_for_i     
+47     IFT          t_for_i        -              L13         
+48     GOTO         -              -              L14         
+49     LABEL        -              -              L13         
+50     WRITE        "Producto "    -              -           
+51     WRITE        i              -              -           
+52     WRITE        "Clave: "      -              -           
+53     ARRGET       claves         i              t5          
+54     WRITE        t5             -              -           
+55     WRITE        "Precio: "     -              -           
+56     ARRGET       precios        i              t6          
+57     WRITE        t6             -              -           
+58     WRITE        "Stock: "      -              -           
+59     ARRGET       stock          i              t7          
+60     WRITE        t7             -              -           
+61     +            i              1              t_inc_i     
+62     =            t_inc_i        -              i           
 63     GOTO         -              -              L12         
-64     LABEL        -              -              L11         
-65     ARRGET       calificaciones j              t15         
-66     >=           t15            70.0           t16         
-67     IFT          t16            -              L13         
-68     GOTO         -              -              L14         
-69     LABEL        -              -              L13         
-70     ARRGET       nombres        j              t17         
-71     WRITE        t17            -              -           
-72     WRITE        " APROBADO"    -              -           
-73     GOTO         -              -              L15         
-74     LABEL        -              -              L14         
-75     ARRGET       nombres        j              t18         
-76     WRITE        t18            -              -           
-77     WRITE        " REPROBADO"   -              -           
-78     LABEL        -              -              L15         
-79     +            j              1              t_inc_j     
-80     =            t_inc_j        -              j           
-81     GOTO         -              -              L10         
-82     LABEL        -              -              L12         
+64     LABEL        -              -              L14         
+65     LABEL        -              -              L11         
+66     GOTO         -              -              L4          
+67     LABEL        -              -              L8          
+68     ==           opcion         3              t_sw        
+69     IFT          t_sw           -              L15         
+70     GOTO         -              -              L16         
+71     LABEL        -              -              L15         
+72     WRITE        "Clave a buscar:" -              -           
+73     READ         -              -              claveBuscar 
+74     =            0              -              encontrado  
+75     -            cantidad       1              t8          
+76     =            0              -              i           
+77     LABEL        -              -              L17         
+78     <=           i              t8             t_for_i     
+79     IFT          t_for_i        -              L18         
+80     GOTO         -              -              L19         
+81     LABEL        -              -              L18         
+82     ARRGET       claves         i              t9          
+83     ==           t9             claveBuscar    t10         
+84     IFT          t10            -              L20         
+85     GOTO         -              -              L21         
+86     LABEL        -              -              L20         
+87     WRITE        "Producto encontrado" -              -           
+88     WRITE        "Precio: "     -              -           
+89     ARRGET       precios        i              t11         
+90     WRITE        t11            -              -           
+91     WRITE        "Stock: "      -              -           
+92     ARRGET       stock          i              t12         
+93     WRITE        t12            -              -           
+94     =            1              -              encontrado  
+95     LABEL        -              -              L21         
+96     +            i              1              t_inc_i     
+97     =            t_inc_i        -              i           
+98     GOTO         -              -              L17         
+99     LABEL        -              -              L19         
+100    ==           encontrado     0              t13         
+101    IFT          t13            -              L23         
+102    GOTO         -              -              L24         
+103    LABEL        -              -              L23         
+104    WRITE        "Producto no encontrado" -              -           
+105    LABEL        -              -              L24         
+106    GOTO         -              -              L4          
+107    LABEL        -              -              L16         
+108    ==           opcion         4              t_sw        
+109    IFT          t_sw           -              L26         
+110    GOTO         -              -              L27         
+111    LABEL        -              -              L26         
+112    WRITE        "Clave del producto:" -              -           
+113    READ         -              -              claveVenta  
+114    WRITE        "Cantidad a vender:" -              -           
+115    READ         -              -              cantidadVenta
+116    =            0              -              vendido     
+117    -            cantidad       1              t14         
+118    =            0              -              i           
+119    LABEL        -              -              L28         
+120    <=           i              t14            t_for_i     
+121    IFT          t_for_i        -              L29         
+122    GOTO         -              -              L30         
+123    LABEL        -              -              L29         
+124    ARRGET       claves         i              t15         
+125    ==           t15            claveVenta     t16         
+126    IFT          t16            -              L31         
+127    GOTO         -              -              L32         
+128    LABEL        -              -              L31         
+129    ARRGET       stock          i              t17         
+130    >=           t17            cantidadVenta  t18         
+131    IFT          t18            -              L34         
+132    GOTO         -              -              L35         
+133    LABEL        -              -              L34         
+134    ARRGET       stock          i              t19         
+135    -            t19            cantidadVenta  t20         
+136    ARRSET       i              t20            stock       
+137    WRITE        "Venta realizada" -              -           
+138    WRITE        "Stock restante: " -              -           
+139    ARRGET       stock          i              t21         
+140    WRITE        t21            -              -           
+141    GOTO         -              -              L36         
+142    LABEL        -              -              L35         
+143    WRITE        "Stock insuficiente" -              -           
+144    LABEL        -              -              L36         
+145    =            1              -              vendido     
+146    LABEL        -              -              L32         
+147    +            i              1              t_inc_i     
+148    =            t_inc_i        -              i           
+149    GOTO         -              -              L28         
+150    LABEL        -              -              L30         
+151    ==           vendido        0              t22         
+152    IFT          t22            -              L37         
+153    GOTO         -              -              L38         
+154    LABEL        -              -              L37         
+155    WRITE        "Producto inexistente" -              -           
+156    LABEL        -              -              L38         
+157    GOTO         -              -              L4          
+158    LABEL        -              -              L27         
+159    ==           opcion         5              t_sw        
+160    IFT          t_sw           -              L40         
+161    GOTO         -              -              L41         
+162    LABEL        -              -              L40         
+163    WRITE        "Saliendo del sistema" -              -           
+164    GOTO         -              -              L4          
+165    LABEL        -              -              L41         
+166    LABEL        -              -              L42         
+167    WRITE        "Opcion invalida" -              -           
+168    LABEL        -              -              L4          
+169    GOTO         -              -              L1          
+170    LABEL        -              -              L2          
 --------------------------------------------------
-Total de instrucciones: 83
+Total de instrucciones: 171

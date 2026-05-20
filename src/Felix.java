@@ -705,19 +705,23 @@ public class Felix implements FelixConstants {
             }
         } else {
             // Leer todo stdin en un buffer para que el parser no consuma System.in
-            // El usuario debe presionar Ctrl+D (Unix/Mac) o Ctrl+Z (Windows) para terminar
-            System.out.println("Escribe tu c\u00f3digo Felix. Presiona Ctrl+D (Mac/Linux) para compilar:");
+            // El usuario debe presionar Ctrl+D (Unix/Mac), Ctrl+Z (Windows) o escribir EOF para terminar
+            System.out.println("Escribe tu c\u00f3digo Felix. Presiona Ctrl+D (Mac/Linux), Ctrl+Z (Windows) o escribe EOF y presiona Enter para compilar:");
             System.out.println("--------------------------------------------------");
             System.out.flush();
             try {
                 java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
-                byte[] buf = new byte[1024];
-                int n;
-                while ((n = System.in.read(buf)) != -1) {
-                    baos.write(buf, 0, n);
+                java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(System.in, "UTF-8"));
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (line.trim().equalsIgnoreCase("EOF")) {
+                        break;
+                    }
+                    baos.write(line.getBytes("UTF-8"));
+                    baos.write('\n');
                 }
                 inputStream = new java.io.ByteArrayInputStream(baos.toByteArray());
-            } catch (java.io.IOException ex) {
+            } catch (Exception ex) {
                 System.out.println("ERROR: No se pudo leer la entrada est\u00e1ndar.");
                 System.exit(1);
             }
@@ -1953,7 +1957,7 @@ intermediateCode.add(new IntermediateInstruction("LABEL", null, null, lEnd));
     finally { jj_save(1, xla); }
   }
 
-  private boolean jj_3R_DeclararMatriz_1420_5_11()
+  private boolean jj_3R_DeclararMatriz_1424_5_11()
  {
     if (jj_scan_token(NEW)) return true;
     if (jj_scan_token(MATRIX)) return true;
@@ -1969,7 +1973,7 @@ intermediateCode.add(new IntermediateInstruction("LABEL", null, null, lEnd));
 
   private boolean jj_3_1()
  {
-    if (jj_3R_DeclararMatriz_1420_5_11()) return true;
+    if (jj_3R_DeclararMatriz_1424_5_11()) return true;
     return false;
   }
 

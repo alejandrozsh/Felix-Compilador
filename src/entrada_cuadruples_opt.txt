@@ -3,71 +3,28 @@ Codigo optimizado
 ==================================================
 No.    Operador     Argumento 1    Argumento 2    Resultado   
 --------------------------------------------------
-0      NEWARR       calificaciones 100            -           
-1      =            0.0            -              suma        
-2      NEG          1.0            -              mayor       
-3      =            101.0          -              menor       
-4      WRITE        "Cantidad de alumnos:" -              -           
-5      READ         -              -              cantidad    
-6      -            cantidad       1              t2          
-7      =            0              -              i           
-8      LABEL        -              -              L1          
-9      <=           i              t2             t_for_i     
-10     IFT          t_for_i        -              L2          
-11     GOTO         -              -              L3          
-12     LABEL        -              -              L2          
-13     WRITE        "Calificacion del alumno " -              -           
-14     WRITE        i              -              -           
-15     ARRREAD      i              -              calificaciones
-16     ARRGET       calificaciones i              t3          
-17     +            suma           t3             suma        
-18     >            t3             mayor          t6          
-19     IFT          t6             -              L4          
-20     GOTO         -              -              L5          
-21     LABEL        -              -              L4          
-22     ARRGET       calificaciones i              mayor       
-23     LABEL        -              -              L5          
-24     ARRGET       calificaciones i              t8          
-25     <            t8             menor          t9          
-26     IFT          t9             -              L7          
-27     GOTO         -              -              L8          
-28     LABEL        -              -              L7          
-29     ARRGET       calificaciones i              menor       
-30     LABEL        -              -              L8          
-31     +            i              1              i           
-32     GOTO         -              -              L1          
-33     LABEL        -              -              L3          
-34     /            suma           cantidad       promedio    
-35     WRITE        "Promedio general: " -              -           
-36     WRITE        promedio       -              -           
-37     WRITE        "Mayor calificacion: " -              -           
-38     WRITE        mayor          -              -           
-39     WRITE        "Menor calificacion: " -              -           
-40     WRITE        menor          -              -           
-41     -            cantidad       1              t12         
-42     =            0              -              j           
-43     LABEL        -              -              L10         
-44     <=           j              t12            t_for_j     
-45     IFT          t_for_j        -              L11         
-46     GOTO         -              -              L12         
-47     LABEL        -              -              L11         
-48     ARRGET       calificaciones j              t13         
-49     >=           t13            70.0           t14         
-50     IFT          t14            -              L13         
-51     GOTO         -              -              L14         
-52     LABEL        -              -              L13         
-53     WRITE        "Alumno "      -              -           
-54     WRITE        j              -              -           
-55     WRITE        " APROBADO"    -              -           
-56     GOTO         -              -              L15         
-57     LABEL        -              -              L14         
-58     WRITE        "Alumno "      -              -           
-59     WRITE        j              -              -           
-60     WRITE        " REPROBADO"   -              -           
-61     LABEL        -              -              L15         
-62     +            j              1              j           
-63     GOTO         -              -              L10         
-64     LABEL        -              -              L12         
+0      WRITE        "Ingrese el numero valor deseado" -              -           
+1      READ         -              -              n           
+2      =            1              -              valor       
+3      =            1              -              i           
+4      *            1              3              t2          
+5      LABEL        -              -              L1          
+6      <=           i              n              t_for_i     
+7      IFT          t_for_i        -              L2          
+8      GOTO         -              -              L3          
+9      LABEL        -              -              L2          
+10     >            i              1              t1          
+11     IFT          t1             -              L4          
+12     GOTO         -              -              L5          
+13     LABEL        -              -              L4          
+14     -            i              1              t3          
+15     *            t2             t3             t4          
+16     +            valor          t4             valor       
+17     LABEL        -              -              L5          
+18     WRITE        valor          -              -           
+19     +            i              1              i           
+20     GOTO         -              -              L1          
+21     LABEL        -              -              L3          
 --------------------------------------------------
-Total de instrucciones: 65
+Total de instrucciones: 22
 ==================================================

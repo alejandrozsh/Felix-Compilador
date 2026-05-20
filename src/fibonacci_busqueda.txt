@@ -9,12 +9,12 @@ FOR i = 2 TO fin
     SET fib[i] TO fib[i - 1] + fib[i - 2];
 ENDFOR
 
-WRITE "--- SERIE FIBONACCI ---";
+WRITE "SERIE FIBONACCI";
 FOR j = inicio TO fin
     WRITE fib[j];
 ENDFOR
 
-WRITE "--- BUSQUEDA ---";
+WRITE "BUSQUEDA";
 READ num_buscar;
 SET encontrado TO 0;
 
